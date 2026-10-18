@@ -1,0 +1,165 @@
+# Handoff: where to pick up
+
+## Build started (2026-10-17): splat-only pipeline for the Insta360 X4
+The user chose to start building (deviations from PLAN.md are OK if logged here).
+
+### Data and capture
+- Insta360 **X4** (not X5): 5.7K, 2× 2880² raw fisheye HEVC tracks, 29.97 fps. Two office clips from 2026-10-16, copied from the SD card to `data/raw/insta360/2026-10-16_office/` (068 = 9 min 05 s, 069 = 68 s). Project: `projects/office/`.
+- **Capture (from the user):** one office capture in two passes at different heights. 068 = the low pass plus the start of the high pass; 069 = the rest of the high pass after a battery swap. Both clips go into ONE joint SfM: `merge-views --clips 068,069 --name all` (hard links, names `<clip>_<frame>`), then `sfm --views all`.
+- **Calibration:** the trailer holds a Mei model per lens (xi, fx, fy, cx, cy, ypr, t, k1-3, p1-2) on a 16000×6000 canvas (2 × 8000×6000 sensors). Track mapping = centred 6000² crop × 0.48. Verified: straight lines in the views; matches the vendor lens curve within 5 px; SfM with the intrinsics and rig held fixed reaches 0.9 px (research/digest/build-01-x4-calib-gsplat-windows.md).
+
+### Toolchain (all under `C:\dev`, see `C:\dev\build\build_gs.bat`)
+- COLMAP 4.2.1 CUDA build in `C:\dev\tools\colmap-4.2.1`. For ALIKED/LightGlue (ONNX Runtime CUDA) it needs CUDA 12.8 `bin` and torch's cuDNN 9 DLLs on PATH; `app/core/tools.py:colmap_env()` does that.
+- CUDA toolkit 12.8.1 (driver unchanged, 610.88). Vocab trees in `C:\dev\tools\vocab` (SIFT 256K and ALIKED 64K).
+- venvs: `C:\dev\envs\pipe` (py3.12: numpy, OpenCV 5, PyAV 19, scipy, pycolmap 4.2.1) and `C:\dev\envs\gs` (py3.11, torch 2.8.0+cu128, gsplat 1.6.0 from main 512d366 + PR #1055 + our `cudaEventCreateWithFlags` fix, fused-ssim, fused-bilagrid, PPISP 1.2.1). Patch: `app/trainers/gsplat_fork/patches/gsplat-512d366-windows.patch`.
+- splat-transform 3.10.1 in `C:\dev\tools\splat-transform`.
+- gsplat build verified: depth-order and permutation tests pass; gradients match finite differences.
+
+### Code (`app/`, run with `C:\dev\envs\pipe\Scripts\python.exe -m app ...`)
+`init` → `probe` → `frames` (sharpest pair per 0.4 s window, PNG) → `views` (5 pinhole views per lens, 1600², 90°, static operator cone mask) → `merge-views` (several clips of one capture) → `sfm` (COLMAP rig; ALIKED + LightGlue by default; report includes track length and path-jitter warnings) → `train` (gravity-up + approximate scale via pycolmap, then gsplat MCMC through `app/trainers/gsplat_fork/train.py` + `gsl_dataset.py`: per-image masks, whole-frame hold-out) → `export` (SOG, SPZ v3, self-contained HTML viewer via splat-transform).
+
+### Findings (2026-10-17)
+- **SIFT fails on this footage.** Indoor low light, HEVC grain and plain walls/ceilings: only ~150–250 raw matches between frames 0.4 s apart, none at 1.6 s. Median track length was 4, and the global mapper produced a scrambled camera path (jitter ratio 0.87). Reprojection was still 0.9 px, so that number alone hides the problem. gsplat on that model gave blurry floaters (~14 dB). **ALIKED + LightGlue** on the same frames: 708 inliers at 0.4 s and 127 at 1.6 s. It is now the default; validation on clip 069 is running.
+- **Scale is not observable** from the 3.18 cm lens baseline (fixed-rig BA from different starting scales does not converge to one scale). An approximate scale is applied instead (median frame step = 0.3 m). LiDAR or one measured distance gives the true scale.
+- Fixed: COLMAP `model_transformer` misread our matrix (orientation now in pycolmap); Windows `\` vs `/` in gsplat's image list; masks did not reach gsplat's DataLoader workers on Windows (now a real subclass); GPU OOM from running SfM and training at once (**one GPU job at a time**).
+
+### Deviations from PLAN
+No DAG/cache yet (plain stage CLIs); frames chosen by time, not distance; operator masked by a static cone (SAM masks still to do); PPISP per training image, not shared per 360 frame; no rig expansion in matching (cost).
+
+### User decisions (2026-10-17, afternoon)
+- **Masks:** cut out the operator and *moving* people; people sitting still stay in the splat. Plan: SfM masks hide all people (clean features); training masks hide only the operator and people whose floor position moves between frames (placed on the floor via the camera poses).
+- **No 20 h joint run (068+069) for now.** Set it up so it can start with one command. First finish the 069 splat, then move on to the **browser viewer**: walk mode with collision blocks and pop-up info markers.
+
+### Progress (2026-10-17, ~16:15)
+- ALIKED + LightGlue SfM on 069 (`sfm/069/aliked_global`): 1710/1710 registered, 116k points, 1.37 px, and a **coherent walking path** (path length / extent 6.5 vs 18.9 for the scrambled SIFT model). COLMAP's rig verification was stopped after > 30 min of post-matching CPU work (now off by default; `--resume-from mapper` reuses a database).
+- Training `train/069/aliked_1m_15k` (15k steps, 1M cap) for the first browser walk-through.
+- **Browser viewer** `web/viewer` (Vite 8 + TS + three 0.180 + Spark 2.3.1), runs on http://127.0.0.1:5173 with `npm run dev` (serves `projects/office/export/current`). Verified headless with Edge (`node tools/shot.mjs out.png`): Spark loads the SOG in ~1.3 s on the RTX 3080. Features: walk/fly, collision voxels + user blocks, pop-up cards, spatial audio (ambient sources + card sounds; placeholder WAVs generated on export), edit mode with save to scene.json.
+- Person masks (`people`, `people-classify`) and the overnight joint run (`scripts/run_joint_office.ps1`) are written but not run yet.
+
+### Paused (2026-10-17, ~17:15): splat generation; switched to the viewer with a downloaded splat
+- **Training is paused at the user's request.** State: ALIKED SfM on 069 is good (coherent path), but gsplat training with all 10 views per frame collapses (opacities die, ~95% of Gaussians relocated every 100 steps, PSNR ~12, renders a flat fog). With **lens0_c views only** it trains fine (train loss ~0.07, val 18.6 dB in 3k steps: `train/069/expD_lens0c_aliked`). Checked OK: rasterizer depth order, gradients (finite differences), fused-ssim, poses (SfM points render in place), masks. Next suspects: something about combining views (the 'u'/'d' views, the black out-of-lens areas, masks on many views at once, or per-view exposure), and the MCMC noise/opacity settings with 1530 images. Brush 0.3.0 is downloaded to `C:\dev\tools\brush-0.3.0` as an independent second trainer to try.
+- **Demo scene:** Deep Blending "playroom", pretrained by the 3DGS authors (Inria; research / non-commercial licence: OK for this personal test, do not publish). From the Voxel51 HF mirror into `data/external/playroom/`. Imported with `python -m app import-ply office --ply data/external/playroom/point_cloud_30000.ply --name playroom` (up = -Y, floor/ceiling RANSAC, ceiling scaled to 2.6 m; the viewer applies the transform from scene.json). Review content: `app/tools/demo_playroom.py` (gs env): 3 image cards (pictures rendered from the splat), 2 voice markers (Windows TTS, Zira), a music-box loop and room tone.
+- **Viewer:** round icon markers (+ = info card, waveform = audio), info card with carousel/thumbnails/fullscreen, bottom audio bar, positional ambient sounds, edit-mode upload of images/audio into the scene's assets/. Verified headless (`node tools/shot_ui.mjs <prefix>`). **Gaze to open:** keeping the crosshair on a marker for 1 s fills a small ring (idle: just the dot; the ring only appears while gazing) and opens it (card or audio); it re-arms after looking away. Cards do not pause anything: walking continues, wheel = next picture (while looking around), E closes, walking away closes it (`GAZE_SECONDS` in main.ts; test: `node tools/test_gaze.mjs <prefix>`).
+- **Cards restyled (2026-10-18)** to match the user's reference video (`exemple/20261018-0710-02.4056678.mp4`, a ViewerStudio forest tour). The card is anchored just above its marker and follows it on screen (it may slide partly off-screen). It closes when the marker leaves the view or the player is more than gazeRange + 2 m away, and has no × button. The open marker greys out. Fade-in is staggered; pictures slide (2:1 frame; portrait pictures are shown whole over a blurred copy). Test: `node tools/test_card.mjs <prefix>`.
+  - Fullscreen = a large centred panel over the blurred scene (user's screenshot): picture on top, big title, and the text below scrolls. It frees the mouse and pauses walking; ×, Esc or a click outside brings back the card and re-locks the pointer. The crosshair draws above the card. While the pointer is locked, the button, thumbnail or marker under the crosshair gets a white ring and receives the click. Wheel over the text scrolls it; elsewhere the wheel changes the picture. The card stays open while the crosshair is on it, even if the marker goes off-screen, and gaze cannot open markers through it.
+- Run: `cd web\viewer` then `npm run dev`, open http://127.0.0.1:5173 (serves `projects/office/export/current`, now the playroom).
+
+### User decision (2026-10-18): splat creation gets a browser UI
+A local Python job server (one GPU job at a time) plus browser pages: import/timeline → frames → SfM → train (live preview) → export. Clips are probed automatically (no manual fps/quality entry). Clips from one session (same camera and settings, a short gap such as a battery swap) are suggested as one capture on a timeline the user can override, with trim handles. A frame-rate slider shows frame/image counts and time estimates. **The quality-drop estimate was dropped by the user.** The user also asked for a **cleanup tool** (remove fuzz/floaters + undo) now, with more tools later.
+
+### Built (2026-10-18): Splat Studio + cleanup
+Run: `C:\dev\envs\pipe\Scripts\python.exe -m app serve` (port 8765), plus `npm run dev` in web/viewer. Then open **http://127.0.0.1:5173/studio.html** (Vite proxies /studio-api).
+- **Server** `app/server/`: `http.py` (stdlib router, byte ranges), `api.py` (routes), `jobs.py` (queue persisted in `projects/_server/jobs/`, one job at a time, cancel kills the process tree, retry from the failed step, orphans killed on restart), `pipeline.py` (captures + session suggestion, steps with up-to-date checks, stale outputs cleared before a rerun because COLMAP reads every image in a folder, progress parsed from tqdm/COLMAP logs), `machine.py` (per-PC history `projects/_server/machine-<host>.json`, benchmark, estimates), `clean.py`.
+- **Training hooks** in `app/trainers/gsplat_fork/train.py` (only when GSL_PROGRESS_FILE / GSL_CONTROL_FILE are set): TensorBoard scalars go to `progress.jsonl`; pause; stop = jump to the last step, so the final PLY, eval and export happen as usual; exits instead of gsplat's endless viewer sleep. The live viewer is viser on :8080, embedded in the studio.
+- **Estimates:** the benchmark (`python -m app bench`, `app/trainers/bench.py`) gave 14.8/18.1/24.1/38.0/51.4 ms/step at 0.25/0.5/1/2/3 M Gaussians on the 3080. Real runs scale that curve (069: **~0.030 s/step at 1 M = 31–35 steps/s**; the earlier "0.18 s/step" note was wrong, it included eval/save pauses). SfM defaults from the 069 COLMAP log: extraction 0.82 img/s, matching 0.56 img/s, mapper ~12 img/s. **SfM dominates:** joint 068+069 at 2.5 fps ≈ 13.5 h of SfM vs ~1.7 h of training. Disk ≈ 43 MB per 360 frame.
+- **Cleanup** `web/viewer/clean.html` (Studio → Splats → "Clean up…"): loads the export's master PLY (`scene.json` `splat.source`, now recorded by export/import-ply). Opens at the walk start point; WASD/QE fly, orbit, Overview. Box/brush select (Shift add, Ctrl remove, optional "only near the camera" depth limit), Delete, Undo/Redo (diff-based, 200 steps), Save → `<export>/clean/{mask.bin,cleaned.ply,edits.json}`, rebuilt `scene.sog` (original kept as `scene.orig.sog`) and rebuilt collision. "Restore original" resets it (verified byte-identical on the playroom). Edits work on Spark's packed RGBA word (alpha 0 = deleted), so they stay fast with 2 M splats.
+- `ply_scene.room_collision()` was split out of `build_scene` (same output, verified) so cleanup can rebuild collision with the scene's existing transform.
+- Tests: `tools/shot_studio.mjs <out> [project]`, `tools/test_clean.mjs <prefix> [project] [export] [--save]`, `tools/test_pipeline.py <insv>` (throwaway project `studio-test`).
+- **End-to-end test passed (2026-10-18)** on project `studio-test` (069 trimmed to 0:20–0:35, 2 fps, 30 frames / 300 views, 300k cap, 3k steps). Times: frames 9 s, views 14 s, SfM 12.5 min (estimate 15), train 106 s, export 2 s. Pause held the step at 733; stop-and-keep at step 1607 saved, evaluated (PSNR 17.3) and exported → `export/069/300k_3k_1018-1018`. Fixed afterwards: the SfM phase is now read from the job log (it scrolled out of colmap.log's tail); training runs under 200k Gaussians are no longer recorded as speed samples.
+- Plan: the ~13–15 h joint 068+069 run goes on the **office PC** (RTX 5060 8 GB, sm_120: rebuild gsplat/COLMAP/ORT for Blackwell, check ALIKED VRAM, which used ~9.9 GB on the 3080), after the all-views training collapse is fixed on 069 here.
+- ~~Training with all 10 views collapses~~: **fixed 2026-10-18** with visible Adam (see the findings below).
+
+### Training collapse: findings (2026-10-18, afternoon)
+- **No view set is at fault.** `scripts/ablate_views.py`: 3k steps, cap 500k, all scored on held-out lens0_c (`GSL_EVAL_PREFIX`). Results: c0 20.8 dB, c+c 20.0, one lens c/l/r 20.3, all of lens0 19.8, both rings 19.8, **all 10 views 19.5** (`train/069/abl_results.json`).
+- The old collapsed run (`aliked_1m_15k`) had its **loss bottom out at step ~2000 (0.12) and then rise steadily** (0.23 by 5k, 0.3+ by 10k): it diverges over time; it is not the views.
+- **Cause found and fixed:** MCMC's `opacity_reg` 0.01 acts on every Gaussian every step. In a 360 capture, most Gaussians are invisible in most images, so plain Adam takes full-size steps from the regulariser alone; the Gaussians fade and get relocated, ending in fog. 8k steps at 1 M, all 10 views: plain Adam **13.8 dB, mean opacity 0.001, 26 min** (`base8k_all`) vs `--visible-adam` **20.8 dB, opacity 0.115, 4.7 min** (`vadam_all`). **`visible_adam` is now the default** (`TrainParams.visible_adam`, CLI `--no-visible-adam` for comparisons). The launcher works around a gsplat 512d366 bug (SelectiveAdam got `fused=`). `GSL_TRAIN_EXTRA` passes extra simple_trainer options.
+- **Full run `train/069/va_1m_30k`** (all views, 30k steps, 1 M, 17 min, 1.7 GB peak VRAM): val PSNR 17.6 / 18.0 / 18.2 at 7k / 15k / 30k (all held-out views), exported to `export/069/va_1m_30k` (now the explorer's scene). It's a recognisable room (whiteboard text readable) but soft, with streaky floaters, as expected from one dim 68 s clip. Quality tuning (PPISP exposure, denser frames, the joint 068+069 data) comes later.
+- **People masks tested in the studio** (`studio-test`, 300 views): detection 30 views/s (18 s); 111 instances → 70 still / 20 operator / 21 moving; SfM, classification, training and export all done.
+- **check_office.ps1 verified on the home PC** (all PASS). ALIKED's peak VRAM is ~9.8 of 10 GB with **either** 8192 or 4096 features: ONNX Runtime reserves free memory, so it is not a real need. On 8 GB only an actual out-of-memory failure calls for 4096.
+- CLI `export`/`import-ply` now also point the explorer at the new export (`projects/_server/current.json`); before, the explorer could keep showing whatever the studio last opened.
+- **Pipeline additions today:** people masks are optional studio steps (`people` before SfM, `people-classify` after; on by default; Mask R-CNN weights cached in C:\dev\cache\torch). There is a "features per view" setting (8192 / 4096 for 8 GB GPUs). Mask files are replaced, not written through (merged view sets hard-link them).
+- **Office PC kit:** `scripts/office_setup/` (README, make_transfer.ps1 at home → ~8.5 GB, setup_office.ps1 builds for sm_120, check_office.ps1 tests gsplat + COLMAP ALIKED VRAM, freeze files of both envs).
+
+### User decisions (2026-10-18, evening): LiDAR integration
+- **No combined rig.** Insta360 first, then the BLK2GO, recorded separately right after each other. Registration is therefore geometric (ICP on walls, floor and ceiling), not time sync or a mount offset; PLAN §1.6–1.8 sync/offset work is no longer needed.
+- Office scans (`research/b2g-office-scans-019-020.json`, `research/tools/b2g_summary.py`): **Scan 019** 12:50–12:55 UTC, 124 m path, 15.7 × 15.3 m; **Scan 020** 12:59–13:05 UTC, 188 m, 37.8 × 20.9 m (more area than the 360 walk). 909 + 1152 pano images. Files: `Downloads\OneDrive_1_2026-10-17\BLK2GO-3630957-Scan 019/020.b2g` (newer firmware: config keys carry a `metadata/device/` prefix). The user aligns and cleans them in Cyclone, then exports LAZ (asked for: LAS 1.4, RGB + intensity + GPS time, full density, scan coordinates kept).
+- Wanted, in this order: (1) office PC run; (2) splat↔LiDAR registration + point-cloud layer in the explorer (toggle, opacity blend, colour modes, clipping/slices); (3) LiDAR-assisted training (init + depth loss) and LiDAR auto-cleanup of floaters; (4) measurement tools (snap to LiDAR), floor plans, hotspot integration. **Collision from LiDAR, editable by the user (add and remove).**
+
+### Office LiDAR export received (2026-10-18, late)
+- `laz-testdata/officev6 1.las` (2.9 GB): scans 019 + 020 registered and cleaned in Cyclone. **LAS 1.2, point format 2**: Cyclone did not write 1.4 / GPS time, so there is no per-point time and no scan ID (point_source_id is 0 everywhere). That is acceptable because registration is geometric (no time sync). The only losses: points cannot be split by scan, and time cannot be used to find moving people.
+- 113.3 M points; extent 30.0 × 34.4 × 2.9 m; mm scale; local coordinates, no CRS; Z up. Floor at z ≈ −0.95, ceiling ≈ 1.80 (room height ≈ 2.75 m). Intensity on 99.5% of points (0–65534); RGB on 99.4–99.96% (8-bit × 256). Median spacing ≈ 3 cm (subsample).
+- A top-down slice at 1.15–1.55 m above the floor shows single, sharp walls: the 019↔020 registration looks good. The building runs at ~45° in XY.
+- Raw b2g still only in `Downloads\OneDrive_1_2026-10-17\` (019 = 668 MB, 020 = 829 MB). `laz-testdata` is excluded from make_transfer by design (not needed for the office run).
+
+### Transfer to the office PC (2026-10-18, late): GitHub + Teams instead of USB
+The USB route failed (E: is full of WAV recordings). New route (user wants GitHub first; AWS enterprise is the alternative):
+- **Code and docs → private GitHub repo** (~4 MB; `exemple/` is now in .gitignore). Clone on the office PC to `Desktop\Code\Gsplat+Lidar`.
+- **Teams drive:** `officev6 1.las`, the two b2g files (already uploaded), plus the two `.insv` clips (068 = 4.0 GB, 069 = 0.56 GB; too big for GitHub, which has a 100 MB per-file limit) → office `data\raw\insta360\2026-10-16_office\`. Also `C:\dev\tools\vocab\` (87 MB) → office `C:\dev\tools\vocab\`.
+- **Downloaded on the office PC:** CUDA 12.8.1 (`cuda_12.8.1_572.61_windows.exe`, NVIDIA archive); COLMAP 4.2.1 (setup_office.ps1 downloads it when run without `-Transfer`); Mask R-CNN weights (torchvision downloads them on first use).
+
+### Roadmap (2026-10-18)
+- **Tonight:** (1) user: `make_transfer.ps1` to USB; (2) settings sweep on 069 (reusing its SfM) vs `va_1m_30k` 18.2 dB: PPISP, 2 M cap, antialiased, 60k steps; best → studio defaults; (3) user tries walk, hotspots and cleanup on `export/069/va_1m_30k`; (4) user dry-runs the studio.
+- **Office day:** prerequisites → setup_office.ps1 → check_office.ps1 → smoke test → 068+069 run (~13 h, people masks on).
+- **After:** A review/clean/hotspots on the office splat → B LiDAR layer (PotreeConverter, ICP registration + metric scale, toggle/opacity/colour/clip, editable LiDAR collision) → C LiDAR-assisted training (init + depth loss, skip changed areas) + LiDAR floater auto-select → D measurements (snap to LiDAR), floor plans/sections, hotspot integration, tours → E sharing (static build, device presets, LoD, **WebGPU evaluation**: see Parked ideas) → F forest capture (+ optional drone).
+- BLK2GO `panoimagedata` = **grayscale fisheye navigation-camera frames** (1456×1088 JPEG holding 4 tiles of ~728×544), not colour photos; usable for an alignment check, not for training. Colour detail photos (`userimagedata`) are empty in both scans. Tool: `research/tools/b2g_images.py`.
+
+### Parked ideas (2026-10-18, from Instagram references; details in `research/digest/inspo-01-instagram-refs.md`)
+Marked only, not scheduled. Each is noted next to the roadmap step it fits.
+- **A (cleanup):** SuperSplat 3.0 (MIT, WebGPU) as an external editor for large masters: master PLY → SuperSplat → "import cleaned PLY" → rebuild SOG + collision. Stochastic (unsorted) rendering while moving in clean.html; GPU-side selection if 10 M+ splats get slow.
+- **A/D (hotspots):** a photo/viewfinder mode (focal length, depth of field, framing) that saves the pose as a card image, re-rendered at high resolution offline with gsplat.
+- **E (sharing):** an optional presentation look (grain, vignette, light depth of field), never in measurement or LiDAR modes. Unsorted rendering while moving for the Low preset. Before choosing the renderer for LoD, compare Spark .RAD LoD (WebGL2) with PlayCanvas streamed SOG LoD (WebGPU) on a weak laptop.
+- **WebGPU (user, 2026-10-18: worth pursuing, at step E).** WebGPU sorts on the GPU and is roughly 2× faster on phones and up to 5× on strong GPUs for large scenes (PlayCanvas numbers: iPhone 13 Pro Max 4 M splats 20 → 42 fps; M4 Max 35 M splats 13 → 76 fps). It speeds up sorting, not drawing, so LoD is still what lets weak devices open huge scenes. Steps: (1) add Spark `.RAD` LoD first (the current stack, WebGL2); (2) benchmark the same scene in Spark and in PlayCanvas/supersplat-viewer (WebGPU) on a weak laptop and a phone; (3) switch or go hybrid only if the frame rate gain is worth it. Check by then whether Spark has gained a WebGPU path. Costs of PlayCanvas: not three.js, and no Potree point clouds, which the LiDAR layer needs. A WebGL2 fallback is required either way (about 15% of users have no WebGPU).
+- **C/F:** layered splats: hero objects scanned separately in high detail and placed into the scene via LiDAR registration. A multi-camera action-cam rig as an extra capture source (better low light than the X4).
+
+### For the user to review/test (when back)
+1. The views contact sheet (`python -m app views` output under `projects/office/views/069/images/`): are you happy with 5 views per lens and with the operator cone mask (bottom of each lens)?
+2. Scale: measure one real distance in the office (e.g. a door width or a desk length) so the splat can be scaled exactly.
+3. The first exported splat (`export/.../viewer.html`, opens in a browser) once training on the ALIKED model is done.
+
+## Status (2026-10-07)
+- **Research: complete**, including the 9 gap-fill topics (`research/digest/gaps-01..09-*.md`; raw JSON in `research/raw/research-gaps.json`).
+- **PLAN.md revision 2: complete.** It includes the user's answers, the sample-data analysis (`research/sample-data-findings.md`) and the gap results. Awaiting the user's review; **no code written yet**.
+- **Shareable page published:** https://claude.ai/artifact/TiZnS7i62M7y8YVT271WzS (private; the owner shares it via the page's Share menu).
+  - Rebuild: `research/tools/build_page.py PLAN.md <out.html>` (needs `pip install markdown`).
+  - Republish to the same URL by passing `url` (from a new session) or the same file path (this session: `scratchpad/page/forest-plan.html`).
+- Helper scripts: `research/tools/` (LAS inspection, digest builders, page builder).
+
+## Revision 2.5 (2026-10-07): B2G decoded
+- `laz-testdata/hq-office.b2g` is a **SQLite 3 database**, opened read-only. It contains:
+  - a 200 Hz trajectory: u64 tick + position (m) + quaternion (w, x, y, z), body→world, gravity-aligned Z-up local frame, origin at the start;
+  - a 200 Hz raw IMU;
+  - 1,593 timestamped pano JPEGs and 2 detail images;
+  - events, protobuf calibrations;
+  - `ClockFrequency = 125000000` (8 ns ticks confirmed) and a UTC anchor.
+- All checks passed (gravity constant, gyro vs trajectory r = 0.997 at +10 ms, loop closes to 3.7 cm). Details: `research/b2g-findings.md`; scripts: `research/tools/b2g_*.py`.
+- Sync method A (Insta360 gyro vs BLK2GO gyro) is now confirmed feasible. The 3DR STrajectory script is a cross-check only.
+- Page republished (version 6).
+
+## Revision 2.4 (2026-10-07): end of this session's planning
+- Second LiDAR sample `laz-testdata/mac-1.las` analysed (`research/sample-data-findings.md`): LAS 1.2 point format 2, 56 M points, 48×69×34 m. It has **intensity but no timestamps**; sample 1 (3DR LAZ) has timestamps but no intensity. Steep (~21 m relief), dense understory: the hard case for ground filtering.
+- PLAN: export-path comparison added to Phase 0.2; new Phase 0.2b (ground/nav tests on both samples, which can start now).
+- Open: which tool exported mac-1.las and where it was captured; camera X5/X4; a short BLK2GO test walk (B2G/LGSx).
+- Page republished (version 5).
+- **Next session:** the user reviews the plan, then Phase 0 starts (toolchain smoke test → sample tick checks → ground sweep on the samples).
+
+## Revision 2.3 (2026-10-07)
+- Cyclone (REGISTER 360 PLUS + 3DR) is installed on BOTH PCs, so the whole pipeline runs on the home PC.
+- The project folder stays at Desktop\Code\Gsplat+Lidar (user decision; OneDrive off). Only venvs, CUDA builds and caches go in C:\dev\ (space-free).
+- Added the data tiers (raw → processed → master → delivery) and the viewer quality presets Low/Medium/High/Ultra (PLAN §0.1, Phase 2). Nothing is lost on the small card; it only caps how detailed one trained model can be (tiling, or a bigger GPU later).
+- Page republished (version 4).
+
+## Revision 2.2 (2026-10-07)
+- Added a home vs office PC comparison (PLAN §2.10a). Office PC: Core Ultra 9 285 (24 cores), 64 GB, RTX 5060 8 GB (Blackwell sm_120).
+- **Provisional: use the home PC** (more VRAM, faster GPU, better software support). The office PC only for the Cyclone steps if the licence is there.
+- Added a **quality-first policy** (time is no constraint; multi-day training OK) and the provisional decisions P1–P7, all settled at **checkpoint D1** (end of Phase 0) and recorded in docs/decisions.md (PLAN §0.1).
+- Page republished (version 3).
+
+## Revision 2.1 (hardware correction, 2026-10-07)
+- The machine is a **desktop**, not a laptop: Ryzen 7 7800X3D, 32 GB RAM, **RTX 3080 10 GB** (≈ 9 GB usable), driver 596.36 (OK), VS 2022 Community 17.14 with MSVC 14.44 (OK), no CUDA toolkit yet.
+- Consequences: splat cap 2 M baseline (3 M only with `packed`, 1440 px views as fallback); aerial ≤ 1.5 M; tropical tiles 10–15 m; never cache all images in RAM.
+- The EPP licence covers personal use (confirmed by the user).
+- The page has been republished (version 2). It is now shared org-wide by the user; people outside the org need an invite.
+
+## Key decisions changed in revision 2
+- Raw `.insv` per-lens fisheye → pinhole rig is the primary image path (Studio equirect is the fallback).
+- BLK2GO 6-DOF poses come from a Cyclone 3DR `STrajectory` script on the LGSx (no WORKFLOW needed).
+- Per-point time appears to be 8 ns device ticks (consistent with the manual).
+- Toolchain: CUDA 12.8.1 + torch 2.8.0 + gsplat main patched with PR #1055; driver R595+ (not 595.59); VS 2022 Build Tools 17.14; everything under `C:\dev\`.
+- Drone is optional, only for above-canopy views. If bought: DJI Mini 5 Pro. Lantmäteriet permit mechanics are documented.
+
+## Next steps
+1. User reviews PLAN.md / the page and answers the §6 questions. The biggest ones: X5 vs X4; a short BLK2GO test walk (B2G/LGSx); laptop driver/RAM.
+2. After approval: Phase 0 (toolchain smoke test, sample-data tick checks, 3DR STrajectory script, X5 audit, mount, backyard rehearsal).
+
+## If resuming in a new session
+Say: "Read HANDOFF.md, BRIEF.md and PLAN.md, then continue."

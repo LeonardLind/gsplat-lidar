@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Splat explorer</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      --bg: #101114; --panel: rgba(20, 22, 28, 0.92); --text: #e8eaf0; --muted: #9aa1b2;
+      --accent: #2f9bff; --warn: #ffb020; --danger: #ff4d6a; --line: rgba(255, 255, 255, 0.12);
+      font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text);
+    }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
+    #view { display: block; width: 100vw; height: 100vh; }
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); transition: opacity .5s; z-index: 20; color: var(--muted); }
+    #loading.done { opacity: 0; pointer-events: none; }
+    #hud { position: fixed; left: 12px; top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; max-width: 320px; }
+    #hud.collapsed .help { display: none; }
+    #mode { font-weight: 600; letter-spacing: .02em; }
+    .help { margin-top: 6px; color: var(--muted); font-size: 12.5px; }
+    .help div { display: flex; justify-content: space-between; gap: 16px; }
+    kbd { font: 11px ui-monospace, monospace; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--text); }
+    /* Above the card, so it is always clear what a click will hit; hidden while the card is expanded (free mouse). */
+    #crosshair { position: fixed; left: 50%; top: 50%; width: 32px; height: 32px; margin: -16px; pointer-events: none; z-index: 35; transition: transform .12s; }
+    body.card-expanded #crosshair { display: none; }
+    #crosshair.aim { transform: scale(1.2); }
+    #crosshair.aim .track { stroke: rgba(255,255,255,.9); }
+    #crosshair.aim .dot { fill: #fff; }
+    #crosshair .dot { fill: rgba(255,255,255,.85); }
+    #crosshair .track { fill: none; stroke: rgba(255,255,255,.0); stroke-width: 2.5; transition: stroke .15s; }
+    #crosshair .ring { fill: none; stroke: #fff; stroke-width: 2.5; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 16px 16px;
+      stroke-dasharray: 75.4; stroke-dashoffset: 67.9; transition: stroke-dashoffset .08s linear; filter: drop-shadow(0 0 1.5px rgba(0,0,0,.9)); }
+    /* Idle: only the dot. The ring and its track appear while gazing at a marker (and the track while aiming at a card button). */
+    #crosshair .ring, #crosshair .track { opacity: 0; transition: opacity .12s, stroke .15s, stroke-dashoffset .08s linear; }
+    #crosshair.gazing .ring, #crosshair.gazing .track, #crosshair.aim .track { opacity: 1; }
+    #crosshair .track { stroke: rgba(0,0,0,.25); }
+    #crosshair.gazing .track { stroke: rgba(0,0,0,.4); }
+    #crosshair.gazing .dot { fill: #fff; }
+    #near-hint { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); background: var(--panel); padding: 6px 12px; border-radius: 8px; pointer-events: none; }
+    #near-hint:empty { display: none; }
+    #markers { position: fixed; inset: 0; pointer-events: none; }
+    .marker { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; margin: -22px 0 0 -22px; transform-origin: 22px 22px; }
+    .marker .icon { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+      color: #fff; background: rgba(40, 44, 52, 0.55); border: 2px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .35); backdrop-filter: blur(6px); transition: transform .15s, background .15s; }
+    .marker:hover .icon, .marker.near .icon { transform: scale(1.12); background: rgba(60, 66, 78, 0.75); }
+    .marker.gazed .icon, .marker.aimed .icon { transform: scale(1.12); background: rgba(60, 66, 78, 0.8); }
+    .marker.gazed .label { opacity: 1; }
+    .marker.active .icon { transform: none; color: #2a2d33; background: rgba(235, 237, 240, .6); border-color: transparent; }
+    .marker.active .label { opacity: 0; }
+    .marker.selected .icon { border-color: var(--warn); }
+    .marker .label { position: absolute; left: 52px; top: 10px; white-space: nowrap; background: var(--panel); padding: 3px 9px; border-radius: 6px; font-size: 12.5px; opacity: 0; transition: opacity .15s; pointer-events: none; }
+    .marker:hover .label, .marker.near .label { opacity: 1; }
+    /* Info card: anchored above its marker (main.ts sets the transform every frame), free to slide off-screen. */
+    #card { position: fixed; left: 0; top: 0; width: min(540px, calc(100vw - 24px)); display: flex; flex-direction: column;
+      background: linear-gradient(160deg, rgba(30, 44, 32, .72), rgba(12, 20, 14, .86)); border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px; overflow: hidden; box-shadow: 0 14px 44px rgba(0,0,0,.45); backdrop-filter: blur(16px) saturate(1.2);
+      opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .1s, visibility 0s .1s; z-index: 30; will-change: transform; }
+    #card.open { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity .22s ease-out; }
+    #card.open > * { animation: card-in .28s ease-out both; }
+    #card.open > .body { animation-delay: .07s; } #card.open .thumbs { animation: card-in .28s .15s ease-out both; }
+    @keyframes card-in { from { opacity: 0; } }
+    #card .gallery { position: relative; aspect-ratio: 2 / 1; max-height: 36vh; background: #0b0f0c; flex: none; overflow: hidden; }
+    #card .track { display: flex; height: 100%; transition: transform .45s cubic-bezier(.25, .8, .25, 1); }
+    #card .slide { position: relative; flex: 0 0 100%; height: 100%; overflow: hidden; }
+    #card .slide img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+    #card .slide img.blur { display: none; }
+    #card .slide.contain img.blur { display: block; filter: blur(22px) brightness(.75); transform: scale(1.25); }
+    #card .slide.contain img.pic { object-fit: contain; }
+    #card .nav, #card .full { position: absolute; width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(20, 22, 26, .55);
+      color: #fff; font-size: 22px; line-height: 1; cursor: pointer; display: grid; place-items: center; backdrop-filter: blur(6px); transition: background .15s; }
+    #card .nav:hover, #card .full:hover, #card .nav.aimed, #card .full.aimed { background: rgba(20, 22, 26, .8); }
+    #card .aimed { box-shadow: 0 0 0 2px #fff; }
+    #card .nav { top: 50%; transform: translateY(-50%); padding-bottom: 3px; } #card .prev { left: 10px; } #card .next { right: 10px; }
+    #card .full { right: 10px; top: 10px; }
+    #card .x { display: none; }
+    #card .dots { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; }
+    #card .dots i { width: 6px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.55); transition: width .25s, background .25s; }
+    #card .dots i.on { width: 18px; background: #fff; }
+    #card .content { padding: 14px 18px 4px; min-height: 0; }
+    #card h2 { margin: 0 0 8px; font-size: 18px; font-weight: 650; }
+    #card .text { white-space: pre-wrap; color: #dfe4dc; font-size: 15px; line-height: 1.55; max-height: min(140px, 22vh); overflow-y: auto;
+      padding-right: 10px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.4) transparent; }
+    #card .text.more { mask-image: linear-gradient(#000 70%, transparent); }
+    #card .thumbs { display: flex; gap: 8px; padding: 10px 18px 16px; flex: none; overflow-x: auto; }
+    #card.no-images .content, #card:not(:has(.thumbs)) .content { padding-bottom: 16px; }
+    #card .thumbs img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; cursor: pointer; opacity: .7;
+      border: 1.5px solid rgba(255,255,255,.35); transition: opacity .15s, border-color .15s; }
+    #card .thumbs img:hover { opacity: .9; } #card .thumbs img.on { opacity: 1; border-color: #fff; }
+    /* Expanded card: a large centred panel over the blurred scene; the picture stays put and the text below scrolls. */
+    #card-backdrop { position: fixed; inset: 0; z-index: 29; background: rgba(6, 9, 8, .45); backdrop-filter: blur(22px) saturate(.85);
+      opacity: 0; pointer-events: none; transition: opacity .25s; }
+    body.card-expanded #card-backdrop { opacity: 1; pointer-events: auto; }
+    #card.fullscreen { left: 50%; top: 42px; transform: translateX(-50%); width: min(1080px, calc(100vw - 32px)); height: calc(100vh - 42px);
+      border-radius: 22px 22px 0 0; border-bottom: 0; background: linear-gradient(170deg, rgba(24, 34, 26, .82), rgba(10, 14, 12, .92));
+      animation: card-expand .28s ease-out both; }
+    @keyframes card-expand { from { opacity: 0; transform: translate(-50%, 18px) scale(.985); } }
+    #card.fullscreen .gallery { aspect-ratio: 2.08 / 1; max-height: 52vh; }
+    #card.fullscreen .nav, #card.fullscreen .x { width: 40px; height: 40px; background: rgba(255, 255, 255, .2); }
+    #card.fullscreen .nav:hover, #card.fullscreen .x:hover { background: rgba(255, 255, 255, .32); }
+    #card.fullscreen .prev { left: 14px; } #card.fullscreen .next { right: 14px; }
+    #card.fullscreen .full { display: none; }
+    #card.fullscreen .x { display: grid; position: absolute; right: 14px; top: 14px; border: 0; border-radius: 50%; color: #fff; cursor: pointer;
+      place-items: center; backdrop-filter: blur(6px); transition: background .15s; }
+    #card.fullscreen .body { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 40px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.35) transparent;
+      mask-image: linear-gradient(#000 calc(100% - 56px), transparent); }
+    #card.fullscreen .content { padding: 30px 34px 6px; }
+    #card.fullscreen h2 { font-size: 28px; font-weight: 700; margin-bottom: 14px; }
+    #card.fullscreen .text { font-size: 16px; line-height: 1.7; max-height: none; overflow: visible; padding-right: 0; mask-image: none; }
+    #card.fullscreen .thumbs { padding: 14px 34px 0; }
+    #card.fullscreen .thumbs img { width: 72px; height: 72px; border-radius: 10px; }
+    #audiobar { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 140%); display: flex; align-items: center; gap: 14px;
+      min-width: 300px; max-width: calc(100vw - 32px); padding: 10px 12px 10px 18px; border-radius: 999px; background: rgba(28, 30, 36, .85);
+      border: 1px solid var(--line); backdrop-filter: blur(10px); transition: transform .25s; z-index: 25; }
+    #audiobar.open { transform: translate(-50%, 0); }
+    #audiobar .wave { width: 64px; height: 4px; border-radius: 2px; background: repeating-linear-gradient(90deg, rgba(255,255,255,.35) 0 3px, transparent 3px 6px); position: relative; overflow: hidden; }
+    #audiobar .wave i { position: absolute; inset: 0 auto 0 0; width: 0; background: repeating-linear-gradient(90deg, #fff 0 3px, transparent 3px 6px); }
+    #audiobar .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #audiobar .time { color: var(--muted); font-variant-numeric: tabular-nums; }
+    #audiobar .stop { width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(255,255,255,.12); color: #fff; cursor: pointer; display: grid; place-items: center; }
+    #panel { position: fixed; right: 12px; top: 12px; width: 290px; max-height: calc(100vh - 24px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+    #panel h2 { margin: 0 0 8px; font-size: 15px; } #panel h3 { margin: 12px 0 6px; font-size: 13px; color: var(--muted); }
+    #panel .tools { display: flex; gap: 6px; }
+    #panel button { background: rgba(255,255,255,.06); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; cursor: pointer; margin: 4px 0; }
+    #panel button.on { border-color: var(--accent); background: rgba(47,155,255,.18); }
+    #panel button.danger { border-color: var(--danger); color: var(--danger); }
+    #panel label { display: block; font-size: 12px; color: var(--muted); margin: 6px 0; }
+    #panel label.check { display: flex; gap: 6px; align-items: center; }
+    #panel input:not([type=checkbox]), #panel textarea { width: 100%; box-sizing: border-box; background: rgba(0,0,0,.3); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font: inherit; }
+    #panel .row { display: flex; gap: 6px; } #panel .row label { flex: 1; }
+    #panel .hint { color: var(--muted); font-size: 12px; margin: 6px 0; }
+    #panel hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
+    #status { position: fixed; left: 50%; top: 14px; transform: translate(-50%, -60px); background: var(--panel); padding: 6px 12px; border-radius: 8px; transition: transform .2s; pointer-events: none; }
+    #status.show { transform: translate(-50%, 0); }
+    @media (max-width: 600px) { #hud { max-width: calc(100vw - 48px); } #panel { left: 12px; right: 12px; width: auto; top: auto; bottom: 12px; max-height: 50vh; } }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="loading">Loading splat…</div>
+  <div id="markers"></div>
+  <div id="crosshair"><svg width="32" height="32" viewBox="0 0 32 32">
+    <circle class="track" cx="16" cy="16" r="12"/><circle class="ring" cx="16" cy="16" r="12"/><circle class="dot" cx="16" cy="16" r="2.5"/></svg></div>
+  <div id="hud">
+    <div id="mode">WALK</div>
+    <div class="help">
+      <div><span>Click to look around</span><kbd>Esc</kbd></div>
+      <div><span>Move · run</span><span><kbd>WASD</kbd> <kbd>Shift</kbd></span></div>
+      <div><span>Jump · fly up/down</span><span><kbd>Space</kbd> <kbd>C</kbd></span></div>
+      <div><span>Walk / fly</span><kbd>F</kbd></div>
+      <div><span>Collision on/off</span><kbd>G</kbd></div>
+      <div><span>Show collision voxels</span><kbd>V</kbd></div>
+      <div><span>Open nearby marker</span><kbd>E</kbd></div>
+      <div><span>Sound on/off</span><kbd>M</kbd></div>
+      <div><span>Edit markers and blocks</span><kbd>Tab</kbd></div>
+      <div><span>Back to start · hide help</span><span><kbd>R</kbd> <kbd>H</kbd></span></div>
+    </div>
+  </div>
+  <div id="near-hint"></div>
+  <div id="card-backdrop"></div>
+  <div id="card"></div>
+  <div id="audiobar"></div>
+  <div id="panel" style="display:none"></div>
+  <div id="status"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Splat Cleanup</title>
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="overlay"><div id="rect"></div><div id="brush"></div></div>
+  <header class="bar top">
+    <a href="/studio.html" class="ghost">← Studio</a>
+    <div class="title" id="title">Cleanup</div>
+    <div class="stats" id="stats"></div>
+    <div class="spacer"></div>
+    <button id="reset" class="ghost" hidden>Restore original…</button>
+    <button id="save" class="primary" disabled>Save and apply</button>
+  </header>
+  <nav class="tools">
+    <button data-tool="orbit" title="Look around (O)"><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M17 3l3 1-1 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Look</span></button>
+    <button data-tool="rect" title="Box select (R)"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5"/></svg><span>Box</span></button>
+    <button data-tool="brush" title="Brush select (B)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg><span>Brush</span></button>
+    <hr>
+    <button id="del" title="Delete the selection (Del)"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Delete</span></button>
+    <button id="undo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 7L5 11l4 4M5 11h9a5 5 0 0 1 0 10h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Undo</span></button>
+    <button id="redo" title="Redo (Ctrl+Y)"><svg viewBox="0 0 24 24"><path d="M15 7l4 4-4 4M19 11h-9a5 5 0 0 0 0 10h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Redo</span></button>
+  </nav>
+  <aside class="opts" id="opts">
+    <div class="opt" id="opt-brush"><label>Brush size <b id="bsize-v"></b></label><input type="range" id="bsize" min="6" max="200" step="1"></div>
+    <div class="opt"><label><input type="checkbox" id="depth-on"> Only near the camera <b id="depth-v"></b></label>
+      <input type="range" id="depth" min="0.2" max="20" step="0.1"></div>
+    <div class="opt row"><button class="small" id="none">Select none</button><button class="small" id="invert">Invert</button></div>
+    <div class="opt row"><button class="small" id="view-start" title="Back to the walk start point (Home)">Start view</button>
+      <button class="small" id="view-over" title="See the whole splat from outside (F)">Overview</button></div>
+  </aside>
+  <div class="help" id="help"></div>
+  <div id="loading"><div class="lbox"><div id="lmsg">Loading…</div><div class="lbar"><i id="lprog"></i></div></div></div>
+  <div id="toast"></div>
+  <script type="module" src="/src/clean/main.ts"></script>
+</body>
+</html>

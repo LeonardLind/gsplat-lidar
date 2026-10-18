@@ -1,0 +1,24 @@
+# Raw capture and generated data stay out of git (tiers 1-4, PLAN §0.1)
+data/
+projects/
+laz-testdata/
+*.insv
+*.lrv
+*.laz
+*.las
+*.b2g
+*.ply
+*.spz
+*.sog
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+dist/
+
+# Reference media (not ours to redistribute)
+exemple/

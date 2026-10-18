@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Splat Studio</title>
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">Splat Studio</div>
+    <label class="proj">Project <select id="project"></select></label>
+    <button id="new-project" class="ghost">New project</button>
+    <div class="spacer"></div>
+    <div id="machine" class="chip"></div>
+    <a class="ghost link" href="/" target="_blank" rel="noopener">Explorer ↗</a>
+  </header>
+  <div id="offline" class="offline" hidden>The studio server is not running. Start it with
+    <code>C:\dev\envs\pipe\Scripts\python.exe -m app serve</code> in the project folder.</div>
+  <main>
+    <section id="footage" class="card"></section>
+    <section id="settings" class="card"></section>
+    <section id="jobs" class="card"></section>
+    <section id="training" class="card" hidden></section>
+    <section id="results" class="card"></section>
+  </main>
+  <dialog id="files"></dialog>
+  <div id="toast"></div>
+  <script type="module" src="/src/studio/main.ts"></script>
+</body>
+</html>
