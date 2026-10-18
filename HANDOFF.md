@@ -83,7 +83,7 @@ Run: `C:\dev\envs\pipe\Scripts\python.exe -m app serve` (port 8765), plus `npm r
 
 ### Transfer to the office PC (2026-10-18, late): GitHub + Teams instead of USB
 The USB route failed (E: is full of WAV recordings). New route (user wants GitHub first; AWS enterprise is the alternative):
-- **Code and docs → private GitHub repo** (~4 MB; `exemple/` is now in .gitignore). Clone on the office PC to `Desktop\Code\Gsplat+Lidar`.
+- **Code and docs → public GitHub repo https://github.com/LeonardLind/gsplat-lidar** (user chose public; ~4 MB; `exemple/` is now in .gitignore). Clone on the office PC to `Desktop\Code\Gsplat+Lidar`.
 - **Teams drive:** `officev6 1.las`, the two b2g files (already uploaded), plus the two `.insv` clips (068 = 4.0 GB, 069 = 0.56 GB; too big for GitHub, which has a 100 MB per-file limit) → office `data\raw\insta360\2026-10-16_office\`. Also `C:\dev\tools\vocab\` (87 MB) → office `C:\dev\tools\vocab\`.
 - **Downloaded on the office PC:** CUDA 12.8.1 (`cuda_12.8.1_572.61_windows.exe`, NVIDIA archive); COLMAP 4.2.1 (setup_office.ps1 downloads it when run without `-Transfer`); Mask R-CNN weights (torchvision downloads them on first use).
 
