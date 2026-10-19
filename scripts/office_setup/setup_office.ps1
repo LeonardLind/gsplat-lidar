@@ -90,9 +90,10 @@ pushd $Dev\src\gsplat
 popd
 for %%W in ($Dev\src\gsplat\dist\gsplat-*.whl) do set WHEEL=%%W
 uv pip install --python %PY% --reinstall-package gsplat "%WHEEL%" || exit /b 1
-uv pip install --python %PY% --no-build-isolation --reinstall "git+https://github.com/rahul-goel/fused-ssim@a7c48d6dd7ac6dc39a7958c7c4452e0b10418f38" || exit /b 1
-uv pip install --python %PY% --no-build-isolation --reinstall "git+https://github.com/harry7557558/fused-bilagrid@49f0ef06c9f81810fb9b5dd9027cf1844950cc16" || exit /b 1
-uv pip install --python %PY% --no-build-isolation --reinstall "git+https://github.com/nv-tlabs/ppisp@v1.2.1" || exit /b 1
+rem --no-deps + --reinstall-package: a bare --reinstall also reinstalls torch from PyPI (CPU build) and breaks the environment.
+uv pip install --python %PY% --no-build-isolation --no-deps --reinstall-package fused-ssim "git+https://github.com/rahul-goel/fused-ssim@a7c48d6dd7ac6dc39a7958c7c4452e0b10418f38" || exit /b 1
+uv pip install --python %PY% --no-build-isolation --no-deps --reinstall-package fused-bilagrid "git+https://github.com/harry7557558/fused-bilagrid@49f0ef06c9f81810fb9b5dd9027cf1844950cc16" || exit /b 1
+uv pip install --python %PY% --no-build-isolation --no-deps --reinstall-package ppisp "git+https://github.com/nv-tlabs/ppisp@v1.2.1" || exit /b 1
 echo BUILD OK
 "@ | Set-Content -Encoding ascii $bat
 cmd /c $bat
