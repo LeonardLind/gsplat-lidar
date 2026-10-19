@@ -11,8 +11,10 @@ const STICK = 148; // px, diameter of a stick base
 const KNOB = 62;
 const DEAD = 0.12;
 const RUN_AT = 0.92; // stick deflection from which the player runs
-const LOOK_YAW = 2.3; // rad/s at full right-stick deflection
-const LOOK_PITCH = 1.5;
+// Right-stick turn speed at full deflection (rad/s). ?look=0.5 halves it, ?look=1.5 raises it by half.
+const LOOK_SCALE = Number(new URLSearchParams(location.search).get("look")) || 1;
+const LOOK_YAW = 1.3 * LOOK_SCALE;
+const LOOK_PITCH = 0.85 * LOOK_SCALE;
 const DRAG_LOOK = 0.0048; // rad per px of direct drag
 const TAP_MOVE = 9; // px
 const TAP_MS = 320;
