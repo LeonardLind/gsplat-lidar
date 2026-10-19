@@ -16,3 +16,7 @@ qr = segno.make(url, error="m")
 qr.terminal(compact=True)
 qr.save(out, scale=10, border=3)
 print(f"\n{url}\nsaved {out}")
+if sys.platform == "win32":
+    import os
+
+    os.startfile(out)  # opens the picture so it can be scanned from the screen
