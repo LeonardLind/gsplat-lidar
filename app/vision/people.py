@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -60,9 +61,21 @@ def main() -> None:
     t0 = time.time()
     io = ThreadPoolExecutor(max_workers=6)
     batches = [items[i:i + a.batch] for i in range(0, len(items), a.batch)]
-    pending = io.map(lambda b: [load(x) for x in b], batches)
+
+    def prefetched(ahead: int = 12):
+        """Decode batches in the I/O threads, at most `ahead` batches in front of the GPU. (ThreadPoolExecutor.map
+        starts every batch at once; the GPU is the slower side, so the decoded 1600x1600 images piled up in RAM:
+        ~7.7 MB each, over 100 GB for the 15 000 views of the 068+069 run.)"""
+        queue: deque = deque()
+        for b in batches:
+            queue.append(io.submit(lambda b=b: [load(x) for x in b]))
+            if len(queue) >= ahead:
+                yield queue.popleft().result()
+        while queue:
+            yield queue.popleft().result()
+
     done = 0
-    for batch in pending:
+    for batch in prefetched():
         tensors = [torch.from_numpy(img).permute(2, 0, 1).cuda().float() / 255 for _, img in batch]
         with torch.no_grad(), torch.autocast("cuda", dtype=torch.float16):
             outs = model(tensors)
