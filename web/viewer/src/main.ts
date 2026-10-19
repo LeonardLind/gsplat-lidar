@@ -9,6 +9,7 @@ import { CollisionWorld, VoxelGrid } from "./collision";
 import { Editor } from "./editor";
 import { MarkerLayer, markerKind } from "./markers";
 import { Player } from "./player";
+import { TouchControls, wantsTouchControls } from "./touch";
 import type { CollisionFile, Marker, SceneFile } from "./types";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -34,8 +35,11 @@ async function main(): Promise<void> {
   const scene = await loadJson<SceneFile>("/scene/scene.json");
   document.title = `${scene.name} – splat explorer`;
 
+  // Tablet: on-screen controls (walk and drone only; no editing). ?touch=1 forces them on, ?touch=0 off.
+  const touchMode = wantsTouchControls();
+  const dprCap = Number(new URLSearchParams(location.search).get("dpr")) || (touchMode ? 1.25 : 1.5);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, dprCap));
   const three = new THREE.Scene();
   three.background = new THREE.Color(0x101114);
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 500);
@@ -119,7 +123,11 @@ async function main(): Promise<void> {
     cardMarker = null;
     markers.activeId = null;
   };
-  const lockPointer = () => void Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+  // Tablets have no pointer lock (iPad Safari has no requestPointerLock at all).
+  const lockPointer = () => {
+    if (touchMode || typeof canvas.requestPointerLock !== "function") return;
+    void Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+  };
   // Expanded card: free the mouse (a normal cursor for the panel) and pause walking; shrinking back
   // re-locks the pointer if the player was looking around before.
   let relockAfterExpand = false;
@@ -164,6 +172,16 @@ async function main(): Promise<void> {
   }, { passive: true });
   markers.onOpen = openPopup;
 
+  // Touch controls: a tap on empty picture closes the card (there is no E key) and unlocks audio.
+  const touch = touchMode
+    ? new TouchControls($("touch"), player, canvas, {
+        onTap: () => {
+          void audio.unlock(scene.sounds ?? []);
+          if (card.isOpen && !card.isFullscreen) closePopup();
+        },
+      })
+    : null;
+
   canvas.addEventListener("click", () => {
     void audio.unlock(scene.sounds ?? []);
     if (player.locked && aimed) return aimed.click();
@@ -192,6 +210,7 @@ async function main(): Promise<void> {
         break;
       case "KeyF":
         status(`Mode: ${player.toggleMode()}`);
+        touch?.showMode();
         break;
       case "KeyG":
         player.collide = !player.collide;
@@ -301,6 +320,7 @@ async function main(): Promise<void> {
     updateAim();
     updateGaze(dt);
     hintEl.textContent = editor.active || card.isFullscreen ? ""
+      : touchMode ? (card.isOpen ? "" : markers.nearest ? `Tap or look at the marker: ${markers.nearest.title}` : "")
       : card.isOpen ?((cardMarker?.images?.length ?? 0) > 1 ? "Scroll: next picture · E: close" : "E: close")
       : markers.nearest ? `Press E: ${markers.nearest.title}` : "";
     modeEl.textContent = `${editor.active ? "EDIT" : player.mode.toUpperCase()} · collision ${player.collide ? "on" : "off"} · scale ${scene.frame.scale}`;

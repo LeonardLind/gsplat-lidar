@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "tablet": "vite build -c vite.tablet.config.ts && vite preview -c vite.tablet.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#101114">
   <title>Splat explorer</title>
   <link rel="icon" href="data:,">
   <style>
@@ -12,7 +16,7 @@
       font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text);
     }
     html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
-    #view { display: block; width: 100vw; height: 100vh; }
+    #view { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; }
     #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); transition: opacity .5s; z-index: 20; color: var(--muted); }
     #loading.done { opacity: 0; pointer-events: none; }
     #hud { position: fixed; left: 12px; top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; max-width: 320px; }
@@ -133,6 +137,27 @@
     #panel hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
     #status { position: fixed; left: 50%; top: 14px; transform: translate(-50%, -60px); background: var(--panel); padding: 6px 12px; border-radius: 8px; transition: transform .2s; pointer-events: none; }
     #status.show { transform: translate(-50%, 0); }
+    /* Tablet controls (touch.ts): walk and drone only, so the keyboard help and the editor panel are hidden. */
+    body.touch { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; position: fixed; inset: 0; width: 100%; }
+    body.touch #hud, body.touch #panel { display: none !important; }
+    #touch { position: fixed; inset: 0; pointer-events: none; z-index: 36; }
+    .tstick { position: absolute; bottom: calc(28px + env(safe-area-inset-bottom)); width: 148px; height: 148px; border-radius: 50%; box-sizing: border-box;
+      display: grid; place-items: center; background: rgba(20, 22, 28, .32); border: 2px solid rgba(255, 255, 255, .32); backdrop-filter: blur(6px);
+      pointer-events: auto; touch-action: none; transition: background .12s, border-color .12s; }
+    .tstick.left { left: calc(28px + env(safe-area-inset-left)); } .tstick.right { right: calc(28px + env(safe-area-inset-right)); }
+    .tstick.on { background: rgba(40, 44, 54, .5); border-color: rgba(255, 255, 255, .7); }
+    .tstick.run { border-color: var(--accent); }
+    .tlabel { position: absolute; top: 9px; font-size: 10px; letter-spacing: .16em; color: rgba(255, 255, 255, .5); pointer-events: none; }
+    .tknob { width: 62px; height: 62px; border-radius: 50%; background: rgba(255, 255, 255, .55); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); pointer-events: none; }
+    .tstick.on .tknob { background: rgba(255, 255, 255, .8); }
+    .tswitch { position: absolute; top: calc(14px + env(safe-area-inset-top)); right: calc(14px + env(safe-area-inset-right)); display: flex; padding: 3px; border-radius: 999px;
+      background: var(--panel); border: 1px solid var(--line); pointer-events: auto; }
+    .tswitch button { border: 0; background: transparent; color: var(--muted); font: 600 14px system-ui, sans-serif; padding: 9px 18px; border-radius: 999px; touch-action: manipulation; }
+    .tswitch button.on { background: rgba(255, 255, 255, .17); color: #fff; }
+    .tbtns { position: absolute; bottom: calc(40px + env(safe-area-inset-bottom)); right: calc(28px + 148px + 20px + env(safe-area-inset-right)); display: none; flex-direction: column; gap: 14px; }
+    .tbtn { width: 68px; height: 68px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .4); background: rgba(20, 22, 28, .4); color: #fff; font: 600 15px system-ui, sans-serif;
+      backdrop-filter: blur(6px); pointer-events: auto; touch-action: none; }
+    .tbtn.on { background: rgba(255, 255, 255, .3); border-color: #fff; }
     @media (max-width: 600px) { #hud { max-width: calc(100vw - 48px); } #panel { left: 12px; right: 12px; width: auto; top: auto; bottom: 12px; max-height: 50vh; } }
   </style>
 </head>
@@ -157,6 +182,7 @@
       <div><span>Back to start · hide help</span><span><kbd>R</kbd> <kbd>H</kbd></span></div>
     </div>
   </div>
+  <div id="touch"></div>
   <div id="near-hint"></div>
   <div id="card-backdrop"></div>
   <div id="card"></div>

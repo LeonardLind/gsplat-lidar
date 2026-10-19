@@ -19,6 +19,7 @@ __pycache__/
 # Node
 node_modules/
 dist/
+dist-tablet/
 
 # Reference media (not ours to redistribute)
 exemple/

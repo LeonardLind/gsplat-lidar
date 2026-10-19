@@ -128,6 +128,8 @@ Pop-Location
 Step "Browser viewer / studio (npm)"
 Push-Location "$Repo\web\viewer"
 npm ci --no-audit --no-fund
+# A running dev server (npm run dev) locks files in node_modules; npm ci then dies half way and leaves it broken.
+Need ($LASTEXITCODE -eq 0) "npm ci failed in web\viewer: stop 'npm run dev' / 'npm run tablet' and run this script again"
 Pop-Location
 
 Write-Host "`nSETUP DONE. Next: scripts\office_setup\check_office.ps1" -ForegroundColor Green
