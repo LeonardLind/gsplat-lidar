@@ -12,11 +12,12 @@ The sparse model is written in binary and text form plus a JSON report.
 """
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +39,9 @@ FEATURES = {
 class SfmParams:
     features: str = "aliked"
     max_features: int = 8192
+    # Run the ALIKED feature extraction on the CPU (COLMAP's ONNX Runtime). On the Blackwell office PC (RTX 5060) the
+    # GPU path takes ~16 s/image, the 24-core CPU ~2 s/image with the same keypoints (2026-10-19). Default: GSL_EXTRACT_CPU=1.
+    extract_cpu: bool = field(default_factory=lambda: os.environ.get("GSL_EXTRACT_CPU") == "1")
     overlap: int = 15  # neighbouring frames matched in sequence (rig expansion adds all views)
     quadratic_overlap: bool = True
     rig_verification: bool = False
@@ -141,6 +145,7 @@ def run_sfm(views_dir: Path, out_dir: Path, p: SfmParams) -> dict:
            ImageReader__single_camera_per_folder=True,
            ImageReader__camera_params=",".join(f"{x:.6f}" for x in cam["params"]),
            FeatureExtraction__type=extract_type,
+           FeatureExtraction__use_gpu=False if p.extract_cpu else None,
            SiftExtraction__max_num_features=p.max_features if p.features == "sift" else None,
            AlikedExtraction__max_num_features=p.max_features if p.features == "aliked" else None)
     colmap("rig_configurator", database_path=db, rig_config_path=rig_path)
