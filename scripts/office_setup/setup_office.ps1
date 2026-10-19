@@ -56,11 +56,16 @@ if ($head -ne "512d366") { git checkout -f 512d366 }
 # A fresh clone can already be at 512d366 (unpatched), so test the patch itself instead of assuming.
 git submodule update --init --recursive
 $patch = "$Repo\app\trainers\gsplat_fork\patches\gsplat-512d366-windows.patch"
-git apply --check $patch 2>$null
-if ($LASTEXITCODE -eq 0) { git apply $patch; Write-Host "patch applied" }
+# Windows PowerShell 5.1 turns native stderr into a terminating error under "Stop", so run the checks with it relaxed.
+$ErrorActionPreference = "Continue"
+git apply --check $patch 2>&1 | Out-Null
+$fresh = ($LASTEXITCODE -eq 0)
+git apply --check --reverse $patch 2>&1 | Out-Null
+$applied = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = "Stop"
+if ($fresh) { git apply $patch; Write-Host "patch applied" }
 else {
-    git apply --check --reverse $patch 2>$null
-    Need ($LASTEXITCODE -eq 0) "the gsplat tree at $Dev\src\gsplat neither takes nor already has the Windows patch (delete the folder and re-run)"
+    Need $applied "the gsplat tree at $Dev\src\gsplat neither takes nor already has the Windows patch (delete the folder and re-run)"
     Write-Host "patch already applied"
 }
 Pop-Location

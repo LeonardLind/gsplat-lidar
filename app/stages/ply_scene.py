@@ -74,6 +74,34 @@ def orient_room(xyz: np.ndarray, up_hint: np.ndarray, ceiling_m: float = 2.6, se
     return transform, info
 
 
+def orient_outdoor(xyz: np.ndarray, up_hint: np.ndarray, canopy_m: float = 12.0, seed: int = 0) -> tuple[dict, dict]:
+    """Outdoor scenes (forest, street): one ground plane, no ceiling. Puts the ground at z = 0 with +Z up and scales
+    so the 98th percentile of the height above the ground equals `canopy_m` (approximate scale)."""
+    rng = np.random.default_rng(seed)
+    extent = np.percentile(xyz, 95, axis=0) - np.percentile(xyz, 5, axis=0)
+    tol = 0.01 * float(np.linalg.norm(extent))  # terrain is bumpy: a looser band than a room floor
+    sample = xyz[rng.choice(len(xyz), min(len(xyz), 200_000), replace=False)]
+    h = sample @ up_hint
+    lo_band = sample[h < np.percentile(h, 30)]
+    n_floor, d_floor, k_floor = _ransac_plane(lo_band, rng, iters=2000, tol=tol, near=up_hint, max_angle_deg=35)
+    height = sample @ n_floor - d_floor
+    top = float(np.percentile(height, 98))
+    if top <= 0:
+        raise RuntimeError("nothing above the ground plane: wrong up hint?")
+    s = canopy_m / top
+    rot, _ = Rotation.align_vectors([[0, 0, 1]], [n_floor])
+    R = rot.as_matrix()
+    world = s * (xyz @ R.T)
+    t = np.array([-np.median(world[:, 0]), -np.median(world[:, 1]), -s * d_floor])
+    transform = {"scale": s, "quaternion_xyzw": rot.as_quat().tolist(), "position": t.tolist()}
+    below = float((height < -tol).mean())
+    info = {"floor_normal": n_floor.tolist(), "floor_inliers": k_floor, "ceiling_inliers": 0,
+            "ground_inlier_frac": k_floor / len(sample), "below_ground_frac": below,
+            "canopy_units": top, "scale": s, "canopy_m": canopy_m,
+            "score": k_floor / len(sample) - below}
+    return transform, info
+
+
 def apply(transform: dict, xyz: np.ndarray) -> np.ndarray:
     R = Rotation.from_quat(transform["quaternion_xyzw"]).as_matrix()
     return transform["scale"] * (xyz @ R.T) + np.array(transform["position"])
@@ -103,17 +131,39 @@ def room_collision(ply: dict, transform: dict, out_dir: Path, ceiling_m: float =
     return occ, lo, dims
 
 
+def _axis_hint(up: str) -> np.ndarray:
+    hint = np.zeros(3)
+    hint["xyz".index(up[-1])] = -1.0 if up.startswith("-") else 1.0
+    return hint
+
+
 def build_scene(ply_path: Path, out_dir: Path, name: str, up_hint: str = "-y", ceiling_m: float = 2.6,
-                voxel: float = 0.08, splat_file: str = "scene.sog") -> dict:
+                voxel: float = 0.08, splat_file: str = "scene.sog", outdoor: bool = False, canopy_m: float = 12.0,
+                title: str | None = None, note: str | None = None) -> dict:
+    """outdoor=True: ground plane only (no ceiling); `ceiling_m` is then the collision height cap (head height) and
+    up_hint may be "auto" (tries the six axes, keeps the one with the cleanest ground)."""
     ply = read_ply(ply_path)
     xyz = np.stack([ply["x"], ply["y"], ply["z"]], axis=1).astype(np.float64)
     opacity = 1 / (1 + np.exp(-ply["opacity"]))
     scale = np.exp(np.stack([ply["scale_0"], ply["scale_1"], ply["scale_2"]], axis=1)).max(axis=1)
-    sign = -1.0 if up_hint.startswith("-") else 1.0
-    hint = np.zeros(3)
-    hint["xyz".index(up_hint[-1])] = sign
     solid = (opacity > 0.5) & (scale < np.percentile(scale, 90))
-    transform, info = orient_room(xyz[solid], hint, ceiling_m)
+    if outdoor:
+        hints = ["+x", "-x", "+y", "-y", "+z", "-z"] if up_hint == "auto" else [up_hint]
+        tried = []
+        for u in hints:
+            try:
+                tr, inf = orient_outdoor(xyz[solid], _axis_hint(u), canopy_m)
+            except RuntimeError:
+                continue
+            tried.append((inf["score"], u, tr, inf))
+            print(f"   up {u}: ground inliers {inf['ground_inlier_frac']:.3f}, below ground {inf['below_ground_frac']:.3f}, "
+                  f"score {inf['score']:.3f}")
+        if not tried:
+            raise RuntimeError("no usable ground plane for any up axis")
+        _, up_used, transform, info = max(tried, key=lambda t: t[0])
+        info["up_axis_used"] = up_used
+    else:
+        transform, info = orient_room(xyz[solid], _axis_hint(up_hint), ceiling_m)
 
     occ, lo, dims = room_collision(ply, transform, out_dir, ceiling_m, voxel)
 
@@ -133,14 +183,16 @@ def build_scene(ply_path: Path, out_dir: Path, name: str, up_hint: str = "-y", c
         # Demo markers on a small circle around the start, at eye height.
         ring = np.array([[start[0] + 1.2 * np.cos(a), start[1] + 1.2 * np.sin(a), 1.2] for a in np.linspace(0, 2 * np.pi, 4)[:-1]])
         old["markers"], old["sounds"] = demo_content(ring, 0.0, 1.5, [])
-        old["markers"][0]["title"] = "Playroom (pretrained 3DGS model)"
-        old["markers"][0]["text"] = ("Demo scene: the Deep Blending 'playroom', trained by the original 3D Gaussian Splatting "
-                                     "authors (Inria). Research / non-commercial licence: fine for this personal test, "
-                                     "not for publishing. Scale is approximate (ceiling set to 2.6 m).")
+        old["markers"][0]["title"] = title or "Playroom (pretrained 3DGS model)"
+        old["markers"][0]["text"] = note or (
+            "Demo scene: the Deep Blending 'playroom', trained by the original 3D Gaussian Splatting "
+            "authors (Inria). Research / non-commercial licence: fine for this personal test, "
+            "not for publishing. Scale is approximate (ceiling set to 2.6 m).")
+    frame_note = (f"ground found by RANSAC; canopy top (98th percentile) set to {canopy_m} m" if outdoor
+                  else f"floor/ceiling found by RANSAC; ceiling height set to {ceiling_m} m")
     scene = {
         "schema_version": 1, "name": name,
-        "frame": {"up": "+Z", "units": "m", "scale": "approximate", "ceiling_m": ceiling_m,
-                  "note": f"floor/ceiling found by RANSAC; ceiling height set to {ceiling_m} m"},
+        "frame": {"up": "+Z", "units": "m", "scale": "approximate", "ceiling_m": ceiling_m, "note": frame_note},
         "splat": {"url": splat_file, "transform": transform, "source": str(ply_path.resolve()), "voxel": voxel},
         "collision": {"url": "collision.json"},
         "start": {"position": start, "yawDeg": 0.0},

@@ -250,7 +250,12 @@ def cmd_import_ply(a: argparse.Namespace) -> None:
     ply = Path(a.ply).resolve()
     for f in export(ply, out, ["sog"]):
         print(f"   {f}  ({f.stat().st_size / 1e6:.1f} MB)")
-    info = build_scene(ply, out, a.name, up_hint=a.up, ceiling_m=a.ceiling)
+    if a.outdoor:  # no ceiling: --ceiling is then the collision height cap (head height), not a room height
+        info = build_scene(ply, out, a.name, up_hint=a.up, ceiling_m=a.cap, voxel=a.voxel, outdoor=True,
+                           canopy_m=a.canopy, title=a.title, note=a.note)
+        print(f"   up axis used {info.get('up_axis_used', a.up)}")
+    else:
+        info = build_scene(ply, out, a.name, up_hint=a.up, ceiling_m=a.ceiling, title=a.title, note=a.note)
     print(f"   floor normal {[round(x, 3) for x in info['floor_normal']]}, scale {info['scale']:.3f}, "
           f"{info['occupied']} solid voxels, start clearance {info['start_clearance_m']:.2f} m")
     current = p.dir / "export" / "current"
@@ -376,8 +381,15 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("project")
     s.add_argument("--ply", required=True)
     s.add_argument("--name", required=True)
-    s.add_argument("--up", default="-y", help="rough up axis of the PLY: +x -x +y -y +z -z (COLMAP scenes: -y)")
+    s.add_argument("--up", default="-y", help="rough up axis of the PLY: +x -x +y -y +z -z (COLMAP scenes: -y); "
+                                              "with --outdoor also 'auto' (tries all six)")
     s.add_argument("--ceiling", type=float, default=2.6, help="assumed ceiling height in metres (sets the scale)")
+    s.add_argument("--outdoor", action="store_true", help="no ceiling: ground plane only (forest, street)")
+    s.add_argument("--canopy", type=float, default=12.0, help="outdoor: assumed height of the canopy top (98th percentile) in metres (sets the scale)")
+    s.add_argument("--cap", type=float, default=2.5, help="outdoor: collision height cap in metres")
+    s.add_argument("--voxel", type=float, default=0.15, help="outdoor: collision voxel size in metres")
+    s.add_argument("--title", help="title of the first demo marker")
+    s.add_argument("--note", help="text of the first demo marker (e.g. the credit line)")
     s.set_defaults(func=cmd_import_ply)
 
     s = sub.add_parser("orient", help="gravity-up + approximate scale for an SfM run (train does this too)")
