@@ -52,12 +52,17 @@ Step "gsplat source (main 512d366 + our Windows patch)"
 if (-not (Test-Path "$Dev\src\gsplat\.git")) { git clone https://github.com/nerfstudio-project/gsplat.git "$Dev\src\gsplat" }
 Push-Location "$Dev\src\gsplat"
 $head = (git rev-parse --short=7 HEAD)
-if ($head -ne "512d366") {
-    git checkout -f 512d366
-    git submodule update --init --recursive
-    git apply "$Repo\app\trainers\gsplat_fork\patches\gsplat-512d366-windows.patch"
-    Write-Host "patch applied"
-} else { Write-Host "already at 512d366 (patch assumed applied)" }
+if ($head -ne "512d366") { git checkout -f 512d366 }
+# A fresh clone can already be at 512d366 (unpatched), so test the patch itself instead of assuming.
+git submodule update --init --recursive
+$patch = "$Repo\app\trainers\gsplat_fork\patches\gsplat-512d366-windows.patch"
+git apply --check $patch 2>$null
+if ($LASTEXITCODE -eq 0) { git apply $patch; Write-Host "patch applied" }
+else {
+    git apply --check --reverse $patch 2>$null
+    Need ($LASTEXITCODE -eq 0) "the gsplat tree at $Dev\src\gsplat neither takes nor already has the Windows patch (delete the folder and re-run)"
+    Write-Host "patch already applied"
+}
 Pop-Location
 
 Step "Build gsplat + fused-ssim + fused-bilagrid + ppisp for sm_$($Arch.Replace('.',''))"

@@ -1,5 +1,14 @@
 # Handoff: where to pick up
 
+## Office PC run log (2026-10-19), newest first
+Office PC: Core Ultra 9 285, 64 GB, RTX 5060 8 GB (sm_120), driver 616.92. Goal: joint 068+069 run with the current defaults (no LiDAR yet).
+
+- **09:30 Prerequisites checked (README §1).** OK: driver 616.92 (>= 572), VS 2022 Build Tools 17.14 with MSVC 14.44.35207 and Windows SDK 10.0.26100, Node 24.19, git 2.55, ffmpeg/ffprobe 9.0, winget. **Installed:** uv 0.13.1 (winget, user scope, no admin). **Missing:** CUDA 12.8.1 (`nvcc` absent, no `CUDA\v12.8`; needs the installer, admin) and the downloads still in progress (the two `.insv` clips, `C:\dev\tools\vocab`).
+- **Repo location:** `Desktop` is redirected into OneDrive on this PC, so the clone is `C:\Users\leonard.lind\OneDrive - Hexagon\Desktop\Code\gsplat-lidar` (spaces + OneDrive sync). To keep ~65 GB of frames/views/SfM out of OneDrive, `data\` and `projects\` are **junctions** to `C:\dev\gsl-data\{data,projects}` (both gitignored). Whether COLMAP/ffmpeg/gsplat cope with the spaces in the repo path is checked by check_office and the smoke test.
+- **Pre-staged (same commands as setup_office.ps1, which skips finished steps), done 09:45:** `C:\dev` folders, `pipe` env, `gs` env (torch 2.8.0+cu128, arch list includes sm_120), gsplat source at 512d366 + patch (12 files) + submodules, COLMAP 4.2.1 CUDA build (runs), splat-transform 3.10.1, viewer `npm ci`, Mask R-CNN weights (177 MB in `C:\dev\cache\torch\checkpoints`). Log: `C:\dev\build\prestage.log`. The sm_120 gsplat/extras build still waits for CUDA 12.8.
+- **Bug fixed in `setup_office.ps1`:** a fresh gsplat clone is already at 512d366 (unpatched), and the script took that to mean "patch applied" and skipped both the Windows patch and the submodule init (glm), so the build would have failed. It now always inits submodules and tests the patch with `git apply --check` (applies it, or verifies it is already there).
+- **Waiting on:** CUDA 12.8.1 install (admin), the two `.insv` clips and `C:\dev\tools\vocab` (downloads in progress). `Downloads\OneDrive_1_2026-10-19.zip` is a truncated Teams download (b2g scans, lrv, las; no insv), not usable.
+
 ## Build started (2026-10-17): splat-only pipeline for the Insta360 X4
 The user chose to start building (deviations from PLAN.md are OK if logged here).
 
