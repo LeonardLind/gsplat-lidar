@@ -46,10 +46,46 @@ def junction(link: Path, target: Path) -> None:
     _winapi.CreateJunction(str(target.resolve()), str(link))
 
 
+def prepare_model(sparse_model: Path, dest: Path, cap_max: int) -> None:
+    """Put the oriented model where the trainer reads it, after two safety checks.
+
+    * Scene scale: gsplat scales the Gaussians' position learning rate with the farthest camera. If a few
+      cameras sit far outside the walk, training flies apart (068+069, 2026-10-21: scale 2040 for a 50 m scene,
+      Gaussians at millions of units, 14.5 dB). Refuse to start instead of wasting hours.
+    * Starting points: MCMC only grows up to ``cap_max``; a model that starts at or above it can never add
+      Gaussians (1.07 M SfM points, cap 1 M: the count never changed). Keep the points with the longest
+      tracks so that at most 60 % of the cap is used at the start."""
+    import numpy as np
+    import pycolmap
+
+    r = pycolmap.Reconstruction(str(sparse_model))
+    centres = np.array([r.images[i].projection_center() for i in r.reg_image_ids()])
+    d = np.linalg.norm(centres - centres.mean(axis=0), axis=1)
+    scene_scale, p99 = 1.1 * float(d.max()), float(np.percentile(d, 99))
+    print(f"scene scale (as gsplat computes it): {scene_scale:.1f}; 99 % of the cameras are within {p99:.1f}", flush=True)
+    if scene_scale > 3 * p99 + 10:
+        raise SystemExit(f"stray cameras: the scene scale {scene_scale:.0f} is far above the extent of the walk "
+                         f"({p99:.0f}); training would fly apart. Re-run orientation after fixing the camera solve.")
+    limit = int(cap_max * 0.6)
+    if r.num_points3D() <= limit:
+        junction(dest, sparse_model)
+        return
+    n0 = r.num_points3D()
+    by_track = sorted(r.points3D.items(), key=lambda kv: -kv[1].track.length())
+    for pid, _ in by_track[limit:]:
+        r.delete_point3D(pid)
+    if dest.exists() and os.path.isjunction(dest):
+        dest.rmdir()  # a link left by an earlier start in this run folder: never write through it into the shared model
+    dest.mkdir(parents=True, exist_ok=True)
+    r.write(str(dest))
+    print(f"starting points thinned {n0:,} -> {r.num_points3D():,} (longest tracks) so the {cap_max:,} cap can still grow",
+          flush=True)
+
+
 def train(views_dir: Path, sparse_model: Path, run_dir: Path, p: TrainParams) -> int:
     data = run_dir / "data"
     junction(data / "images", views_dir / "images")
-    junction(data / "sparse" / "0", sparse_model)
+    prepare_model(sparse_model, data / "sparse" / "0", p.cap_max)
     result = run_dir / "result"
     result.mkdir(parents=True, exist_ok=True)
 

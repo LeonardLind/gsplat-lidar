@@ -140,6 +140,8 @@ def _oriented_model(p: Project, vid: str, sfm: str) -> Path:
         print(f"oriented model {best.name}: camera tilt spread {info['tilt_spread_deg']:.1f} deg, "
               f"camera extent {[round(x, 2) for x in info['camera_extent']]}, "
               f"reproj {info['mean_reproj_error_px']:.3f} px")
+        for w in info.get("warnings", []):
+            print(f"WARNING: {w}", flush=True)
     return oriented
 
 

@@ -57,9 +57,31 @@ def _rotation_to_minus_z(g: np.ndarray) -> np.ndarray:
     return np.eye(3) + np.sin(ang) * kx + (1 - np.cos(ang)) * kx @ kx
 
 
+def drop_stray_frames(r: pycolmap.Reconstruction, factor: float = 6.0) -> dict:
+    """Deregister 360 frames whose cameras sit far outside the rest of the walk.
+
+    gsplat sets how fast the Gaussians may move from the farthest camera (the "scene scale"). Two frames registered
+    1860 and 620 units away from a 50 m scene made that scale 2040 and the 068+069 training flew apart (2026-10-21).
+    A camera farther from the median centre than ``factor`` x the 90th-percentile distance is a stray: unit-free,
+    so it works before the scale is set."""
+    ids = list(r.reg_image_ids())
+    centres = np.array([r.images[i].projection_center() for i in ids])
+    d = np.linalg.norm(centres - np.median(centres, axis=0), axis=1)
+    thr = factor * float(np.percentile(d, 90))
+    frames = sorted({r.images[i].frame_id for i, dist in zip(ids, d) if dist > thr})
+    for f in frames:
+        r.deregister_frame(f)
+    return {"stray_frames_removed": len(frames), "stray_threshold": thr, "stray_max_distance": float(d.max()),
+            "p90_distance": float(np.percentile(d, 90))}
+
+
 def orient_model(model_dir: Path, out_dir: Path, approx_step_m: float | None = 0.3) -> dict:
     r = pycolmap.Reconstruction(str(model_dir))
-    info: dict = {"scale": "approximate" if approx_step_m else "arbitrary (SfM)"}
+    info: dict = {"scale": "approximate" if approx_step_m else "arbitrary (SfM)", "warnings": []}
+    info.update(drop_stray_frames(r))
+    if info["stray_frames_removed"]:
+        info["warnings"].append(f"{info['stray_frames_removed']} stray frame(s) removed (up to "
+                                f"{info['stray_max_distance'] / max(info['p90_distance'], 1e-9):.0f}x the usual camera distance)")
     if approx_step_m:
         s = approx_step_m / median_step(r)
         r.transform(pycolmap.Sim3d(s, pycolmap.Rotation3d(), np.zeros(3)))
@@ -78,6 +100,11 @@ def orient_model(model_dir: Path, out_dir: Path, approx_step_m: float | None = 0
     pts = np.array([p.xyz for p in r.points3D.values()])
     info["camera_extent"] = np.ptp(centres, axis=0).tolist()
     info["camera_height_spread"] = float(np.std(centres[:, 2]))
+    zr = np.percentile(centres[:, 2], [1, 99])
+    info["camera_height_p1_p99"] = zr.tolist()
+    if zr[1] - zr[0] > 12.0:  # metres (approximate scale): a walk on one floor does not climb a four-storey building
+        info["warnings"].append(f"cameras span {zr[1] - zr[0]:.0f} m in height: the camera path is probably bent or "
+                                f"drifted (a hand-held walk on one floor stays within a few metres)")
     info["points_pct5_95"] = np.percentile(pts, [5, 95], axis=0).tolist()
     info["mean_reproj_error_px"] = float(np.mean([p.error for p in r.points3D.values()]))
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -223,6 +223,11 @@ def model_quality(model_dir: Path) -> dict:
         if im.name.startswith("lens0_c/"):
             centres[im.name] = im.projection_center()
     p = np.array([centres[k] for k in sorted(centres)])
+    # Jumps: a walked camera moves a small, steady step per frame. The 068+069 global solve (2026-10-21) had 52
+    # steps of 10x the typical step or more among 1531 frames (three of 2000x) yet passed the checks below, which
+    # only look at medians. Steps are compared within one clip (names "<clip>_<frame>"): the gap between two
+    # clips of a capture can legitimately be large.
+    clip_of = [Path(k).stem.split("_")[0] if "_" in Path(k).stem else "" for k in sorted(centres)]
     q: dict = {"track_length_median": float(np.median(tl)) if len(tl) else 0.0,
                "track_length_mean": float(tl.mean()) if len(tl) else 0.0}
     if len(p) >= 3:
@@ -230,7 +235,15 @@ def model_quality(model_dir: Path) -> dict:
         d2 = np.linalg.norm(p[2:] - 2 * p[1:-1] + p[:-2], axis=1)
         q["path_jitter_ratio"] = float(np.median(d2) / max(np.median(d1), 1e-12))
         q["path_length_over_extent"] = float(d1.sum() / max(np.ptp(p, axis=0).max(), 1e-12))
+        same = np.array([clip_of[k] == clip_of[k + 1] for k in range(len(d1))])
+        med = float(np.median(d1[same])) if same.any() else float(np.median(d1))
+        rel = d1[same] / max(med, 1e-12)
+        q["path_jumps_10x"] = int((rel > 10).sum())
+        q["path_largest_jump_x"] = float(rel.max()) if len(rel) else 0.0
     q["warnings"] = []
+    if q.get("path_jumps_10x", 0) > max(2, 0.005 * len(p)) or q.get("path_largest_jump_x", 0) > 200:
+        q["warnings"].append(f"camera path has {q.get('path_jumps_10x', 0)} jumps of 10x the usual step or more "
+                             f"(largest {q.get('path_largest_jump_x', 0):.0f}x): the solve split or drifted, positions are wrong")
     # Calibrated on clip 069: scrambled SIFT model 18.9 / 0.87, good ALIKED model 6.5 / 0.68
     # (a hand-held camera on a stick sways, so some jitter is normal; median track length was 4 in both).
     if q.get("path_length_over_extent", 0) > 12 or q.get("path_jitter_ratio", 0) > 0.8:
