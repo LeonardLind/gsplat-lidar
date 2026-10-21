@@ -108,6 +108,7 @@ def cmd_sfm(a: argparse.Namespace) -> None:
     clip = {"id": _views_id(p, a)}
     params = SfmParams(features=a.features, max_features=a.max_features, overlap=a.overlap,
                        **({"extract_cpu": True} if a.extract_cpu else {}),
+                       **({"solver_cpu": True} if a.solver_cpu else {}),
                        loop_detection=a.vocab_tree is not None, vocab_tree=a.vocab_tree,
                        expand_rig=a.expand_rig, rig_verification=a.rig_verification, resume_from=a.resume_from,
                        mapper=a.mapper, refine_rig=a.refine_rig, refine_intrinsics=a.refine_intrinsics,
@@ -344,6 +345,7 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--features", choices=["sift", "aliked"], default="aliked")
     s.add_argument("--max-features", type=int, default=8192)
     s.add_argument("--extract-cpu", action="store_true", help="feature extraction on the CPU (default: env GSL_EXTRACT_CPU=1)")
+    s.add_argument("--solver-cpu", action="store_true", help="global mapper: positioning and bundle adjustment on the CPU (default: env GSL_SOLVER_CPU=1)")
     s.add_argument("--overlap", type=int, default=15)
     s.add_argument("--vocab-tree", help="vocab tree file (must match the features); enables loop detection")
     s.add_argument("--expand-rig", action="store_true", help="match all view pairs of neighbouring frames (slow)")

@@ -42,6 +42,8 @@ class SfmParams:
     # Run the ALIKED feature extraction on the CPU (COLMAP's ONNX Runtime). On the Blackwell office PC (RTX 5060) the
     # GPU path takes ~16 s/image, the 24-core CPU ~2 s/image with the same keypoints (2026-10-19). Default: GSL_EXTRACT_CPU=1.
     extract_cpu: bool = field(default_factory=lambda: os.environ.get("GSL_EXTRACT_CPU") == "1")
+    # Run the global mapper's global positioning and bundle adjustment on the CPU instead of the GPU (COLMAP's default).
+    solver_cpu: bool = field(default_factory=lambda: os.environ.get("GSL_SOLVER_CPU") == "1")
     overlap: int = 15  # neighbouring frames matched in sequence (rig expansion adds all views)
     quadratic_overlap: bool = True
     rig_verification: bool = False
@@ -170,6 +172,8 @@ def _map_and_report(views: dict, views_dir: Path, out_dir: Path, db: Path, colma
     refine = p.refine_intrinsics
     if p.mapper == "global":
         colmap("global_mapper", database_path=db, image_path=views_dir / "images", output_path=sparse,
+               GlobalMapper__gp_use_gpu=False if p.solver_cpu else None,
+               GlobalMapper__ba_ceres_use_gpu=False if p.solver_cpu else None,
                GlobalMapper__refine_sensor_from_rig=p.refine_rig,
                GlobalMapper__ba_refine_focal_length=refine,
                GlobalMapper__ba_refine_principal_point=False,
