@@ -70,7 +70,10 @@ mapper can use the positions as priors to bridge weak links.
 ## Phase 3 (day 3): quality and the explorer
 
 - [ ] Training budget: if VRAM allows, cap 2.5 M / 300k steps on the winner (one run), compare.
-- [ ] LiDAR-based cleanup: drop Gaussians far outside the LiDAR surfaces (outside walls, under the floor, above
+- [x] LiDAR cleanup (`app/lidar/clean_splat.py`): current scene 1.6 M -> 285k Gaussians, 6.8 MB, looks the same.
+  Run it on every new winner after export. Queue job `rigid_depth_reloc_150k` waits for the GPU (start
+  `scripts/train_queue.py lidar/queue.json` again when `aliked_prior/match.done` exists).
+- [x] (was) LiDAR-based cleanup: drop Gaussians far outside the LiDAR surfaces (outside walls, under the floor, above
   the ceiling), re-export; check visually.
 - [ ] Explorer: distance measuring tool (the scale is metric now; PLAN: measurement only with exact scale),
   LiDAR point-size control, a short help text for the LiDAR keys in the tablet view; tablet build.

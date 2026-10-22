@@ -142,8 +142,11 @@ def apply(p: Project, rel: str, reset: bool = False) -> dict:
         room_collision(read_ply(ply_for_collision), sp["transform"], d, scene["frame"].get("ceiling_m", 2.6),
                        sp.get("voxel", 0.08))
     elif sp.get("sparse"):
+        # A LiDAR-frame scene keeps its LiDAR layer and LiDAR collision (scene.lidar.source = the npz).
+        lid = scene.get("lidar")
+        lidar = Path(lid.get("source", r"C:\dev\gsl-data\data\processed\office_lidar_5cm.npz")) if lid else None
         write_scene(d, scene["name"], sp["url"], Path(sp["sparse"]), ply_for_collision, scene["frame"]["scale"],
-                    source_ply=src)
+                    source_ply=src, lidar=lidar)
     else:
         print("collision not rebuilt: the export does not record its SfM model")
     print("collision rebuilt")

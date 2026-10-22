@@ -256,7 +256,7 @@ def write_scene(out_dir: Path, name: str, splat_file: str, model_dir: Path, ply_
 
         xyz, *_ = load_lidar(lidar)  # the merge frame: floor at z = 0
         d = np.load(lidar)
-        lidar_entry = write_lidar_layer(out_dir, xyz.astype(np.float32), d["rgb"], d["intensity"])
+        lidar_entry = {**write_lidar_layer(out_dir, xyz.astype(np.float32), d["rgb"], d["intensity"]), "source": str(lidar)}
         collision, info = build_collision(lidar_as_ply(xyz), cams, LIDAR_COLLISION if p == CollisionParams() else p)
     else:
         collision, info = build_collision(read_ply(ply_path), cams, p)
