@@ -25,7 +25,8 @@ open task.** Tick tasks here (`[x]`) when done and add one line on the outcome.
 ## Phase 1 (tonight): finish the two joined runs, pick the better one
 
 - [x] `train/068+069/rigid_lidar_poseopt_150k`: DIVERGED (pose-opt lr 1e-4, loss 0.1 -> 17 at ~62k). Stopped.
-- [ ] Training queue (`scripts/train_queue.py lidar/queue.json`, watchdog): `rigid_base_150k`,
+- [x] Queue done 00:28: base 17.69, depth_v2 17.77 (current), depth+pose1e5 17.79 (tie -> simpler kept).
+- [x] (was) Training queue (`scripts/train_queue.py lidar/queue.json`, watchdog): `rigid_base_150k`,
   `rigid_depth_v2_150k` (depth loss, NaN fix), `rigid_depth_pose1e5_150k`. Drift fix:
   `--strategy.noise-injection-stop-iter 25000`. Restart the queue with the same command after a reboot.
 - [x] Compared: `rigid_depth_v2_150k` (17.77 dB, no fog near the camera) beats `rigid_base_150k` (17.69 dB). It is current.

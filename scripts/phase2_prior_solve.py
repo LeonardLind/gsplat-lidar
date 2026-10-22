@@ -33,8 +33,12 @@ def log(msg: str) -> None:
 
 def run(args: list, logname: str) -> int:
     log(f"run: {' '.join(map(str, args[:2]))} ... (log {logname})")
+    import sys
+    sys.path.insert(0, str(REPO))
+    from app.core.tools import colmap_env  # CUDA 12 + cuDNN on PATH for ONNX Runtime's CUDA provider (LightGlue)
+
     with open(D / logname, "a", encoding="utf-8") as f:
-        return subprocess.run([str(a) for a in args], stdout=f, stderr=subprocess.STDOUT).returncode
+        return subprocess.run([str(a) for a in args], stdout=f, stderr=subprocess.STDOUT, env=colmap_env()).returncode
 
 
 def queue_idle(queue: Path) -> bool:
