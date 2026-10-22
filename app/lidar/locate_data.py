@@ -25,7 +25,24 @@ def main() -> None:
     ap.add_argument("views", type=Path)
     ap.add_argument("--out", type=Path, default=REPO / "web" / "viewer" / "public" / "locate")
     ap.add_argument("--size", type=int, default=300)
+    ap.add_argument("--placements", type=Path, help="folder with placements.json from solve_clicks: draws the current guess")
+    ap.add_argument("--geometry", type=Path, help="chunk_geometry.pkl (camera positions per chunk)")
+    ap.add_argument("--flag", default="", help="comma list of chunk ids to check first (they get five photo moments)")
     a = ap.parse_args()
+    flagged = {int(x) for x in a.flag.split(",") if x.strip()}
+    placed = {}
+    if a.placements and a.geometry:
+        import pickle
+
+        import numpy as np
+
+        from app.lidar.register import mat_apply
+
+        G = pickle.loads(a.geometry.read_bytes())
+        for pc in json.loads((a.placements / "placements.json").read_text())["chunks"]:
+            cams = mat_apply(np.array(pc["M"]), G[pc["chunk"]]["cams"])
+            placed[pc["chunk"]] = {"path": np.round(cams[::2, :2], 2).tolist(), "score": round(pc["score"], 2),
+                                   "click_rms_m": round(pc["click_rms_m"], 1)}
     (a.out / "t").mkdir(parents=True, exist_ok=True)
     plan = REPO / "web" / "viewer" / "public" / "align" / "plan.png"
     shutil.copy(plan, a.out / "plan.png")
@@ -34,6 +51,9 @@ def main() -> None:
     for c in chunks:
         fr = c["frames"]
         picks = [("start", fr[0]), ("middle", fr[len(fr) // 2]), ("end", fr[-1])]
+        if c["id"] in flagged:  # five moments for the chunks to check: start, quarter, middle, three quarters, end
+            picks = [("start", fr[0]), ("quarter", fr[len(fr) // 4]), ("middle", fr[len(fr) // 2]),
+                     ("three-quarters", fr[3 * len(fr) // 4]), ("end", fr[-1])]
         moments = []
         for label, frame in picks:
             thumbs = []
@@ -48,7 +68,8 @@ def main() -> None:
                 thumbs.append({"view": vl, "url": f"t/{name}"})
             moments.append({"label": label, "frame": frame, "thumbs": thumbs})
         out.append({"id": c["id"], "model": c["model"], "n_frames": c["n_frames"], "first_index": c["first_index"],
-                    "last_index": c["last_index"], "moments": moments})
+                    "last_index": c["last_index"], "moments": moments, "check": c["id"] in flagged,
+                    "guess": placed.get(c["id"])})
     plan_meta = json.loads((REPO / "web" / "viewer" / "public" / "align" / "m1.json").read_text())["plan"]
     (a.out / "chunks.json").write_text(json.dumps({"plan": plan_meta, "chunks": out}))
     print(f"{len(out)} chunks, {sum(len(m['thumbs']) for c in out for m in c['moments'])} thumbnails -> {a.out}")

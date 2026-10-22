@@ -52,7 +52,7 @@ def lookup(walk, ext, xy):
 
 def solve_chunk(cams_raw, bases, marks, walk, ext, room_h):
     n = len(cams_raw)
-    idx = {"start": 0, "middle": n // 2, "end": n - 1}
+    idx = {"start": 0, "quarter": n // 4, "middle": n // 2, "three-quarters": 3 * n // 4, "end": n - 1}
     pts = [(idx[l], np.array([m["x"], m["y"]]), m.get("heading")) for l, m in marks.items() if l in idx]
     if len(pts) < 2:
         return None
