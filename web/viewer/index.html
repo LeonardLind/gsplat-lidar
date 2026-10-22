@@ -22,6 +22,8 @@
     #hud { position: fixed; left: 12px; top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; max-width: 320px; }
     #hud.collapsed .help { display: none; }
     body:not(.has-lidar) .lidar-only { display: none !important; }
+    .measure-label { position: fixed; left: 0; top: 0; pointer-events: none; background: rgba(20, 20, 24, .85); color: #ffd400; border: 1px solid #ffd40066; border-radius: 8px; padding: 4px 9px; font: 600 14px system-ui, sans-serif; text-align: center; white-space: nowrap; z-index: 5; }
+    .measure-label span { display: block; font: 500 11px system-ui, sans-serif; color: #e8e2c0; }
     #mode { font-weight: 600; letter-spacing: .02em; }
     .help { margin-top: 6px; color: var(--muted); font-size: 12.5px; }
     .help div { display: flex; justify-content: space-between; gap: 16px; }
@@ -181,6 +183,7 @@
       <div class="lidar-only"><span>LiDAR on/off · LiDAR only</span><span><kbd>L</kbd> <kbd>Shift</kbd>+<kbd>L</kbd></span></div>
       <div class="lidar-only"><span>LiDAR colours · opacity</span><span><kbd>K</kbd> <kbd>O</kbd></span></div>
       <div class="lidar-only"><span>Cut LiDAR ceiling lower/higher</span><span><kbd>[</kbd> <kbd>]</kbd></span></div>
+      <div class="lidar-only"><span>Measure a distance (2 clicks)</span><kbd>T</kbd></div>
       <div><span>Open nearby marker</span><kbd>E</kbd></div>
       <div><span>Sound on/off</span><kbd>M</kbd></div>
       <div><span>Edit markers and blocks</span><kbd>Tab</kbd></div>

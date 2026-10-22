@@ -9,6 +9,7 @@ import { LidarLayer } from "./lidar";
 import { CollisionWorld, VoxelGrid } from "./collision";
 import { Editor } from "./editor";
 import { MarkerLayer, markerKind } from "./markers";
+import { Measure } from "./measure";
 import { Player } from "./player";
 import { TouchControls, wantsTouchControls } from "./touch";
 import type { CollisionFile, Marker, SceneFile } from "./types";
@@ -79,6 +80,7 @@ async function main(): Promise<void> {
     }
   }
   const world = new CollisionWorld(grid, scene.blocks);
+  const measure = new Measure(three, camera, world, () => lidar, document.body); // T, metric scenes only
   const player = new Player(camera, canvas, world, scene.player.eyeHeight, scene.player.radius, scene.player.stepHeight);
   const s = scene.start;
   player.placeAt(s.position[0], s.position[1], s.position[2], (s.yawDeg * Math.PI) / 180);
@@ -199,8 +201,14 @@ async function main(): Promise<void> {
   onLidarLoaded = () => touch?.addLayerSwitch((k) => { splat.visible = k !== "lidar"; lidar!.visible = k !== "splat"; });
   if (lidar) onLidarLoaded();
 
-  canvas.addEventListener("click", () => {
+  canvas.addEventListener("click", (e) => {
     void audio.unlock(scene.sounds ?? []);
+    if (measure.active && !editor.active && (player.locked || touchMode || typeof canvas.requestPointerLock !== "function")) {
+      // looking around: measure at the crosshair; otherwise at the mouse
+      const ndc = player.locked || touchMode ? new THREE.Vector2(0, 0)
+        : new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      return status(measure.click(ndc));
+    }
     if (player.locked && aimed) return aimed.click();
     if (!editor.active) lockPointer();
   });
@@ -241,6 +249,7 @@ async function main(): Promise<void> {
         else if (markers.nearest) openPopup(markers.nearest);
         break;
       case "Escape":
+        if (measure.active) measure.clear();
         if (card.isFullscreen) {
           card.collapse();
           break;
@@ -284,6 +293,10 @@ async function main(): Promise<void> {
         status(c === null ? "LiDAR ceiling cut off" : `LiDAR cut above ${c.toFixed(2)} m`);
         break;
       }
+      case "KeyT":
+        if (scene.frame.scale !== "metric") { status("Measuring needs a metric scene (trained in the LiDAR frame)"); break; }
+        status(measure.toggle() ? "Measure: click two points (at the crosshair). T again to stop" : "Measure off");
+        break;
       case "KeyR":
         player.placeAt(s.position[0], s.position[1], s.position[2], (s.yawDeg * Math.PI) / 180);
         status("Back to the start");
@@ -341,7 +354,7 @@ async function main(): Promise<void> {
   };
 
   // Debug/test handle (used by tools/shot_ui.mjs to aim at markers).
-  (window as unknown as { __gsl: unknown }).__gsl = { player, markers, card, bar };
+  (window as unknown as { __gsl: unknown }).__gsl = { player, markers, card, bar, measure };
 
   const modeEl = $("mode");
   const hintEl = $("near-hint");
@@ -365,13 +378,14 @@ async function main(): Promise<void> {
       else card.place(p.x, p.y - p.r - 8);
     }
     bar.update();
+    measure.update(innerWidth, innerHeight);
     updateAim();
     updateGaze(dt);
     hintEl.textContent = editor.active || card.isFullscreen ? ""
       : touchMode ? (card.isOpen ? "" : markers.nearest ? `Tap or look at the marker: ${markers.nearest.title}` : "")
       : card.isOpen ?((cardMarker?.images?.length ?? 0) > 1 ? "Scroll: next picture · E: close" : "E: close")
       : markers.nearest ? `Press E: ${markers.nearest.title}` : "";
-    modeEl.textContent = `${editor.active ? "EDIT" : player.mode.toUpperCase()} · collision ${player.collide ? "on" : "off"} · scale ${scene.frame.scale}${lidar?.visible ? ` · LiDAR ${lidar.colour}` : ""}`;
+    modeEl.textContent = `${editor.active ? "EDIT" : player.mode.toUpperCase()}${measure.active ? " · MEASURE" : ""} · collision ${player.collide ? "on" : "off"} · scale ${scene.frame.scale}${lidar?.visible ? ` · LiDAR ${lidar.colour}` : ""}`;
     renderer.render(three, camera);
   });
 }

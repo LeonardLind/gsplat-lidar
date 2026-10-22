@@ -75,7 +75,9 @@ mapper can use the positions as priors to bridge weak links.
   `scripts/train_queue.py lidar/queue.json` again when `aliked_prior/match.done` exists).
 - [x] (was) LiDAR-based cleanup: drop Gaussians far outside the LiDAR surfaces (outside walls, under the floor, above
   the ceiling), re-export; check visually.
-- [ ] Explorer: distance measuring tool (the scale is metric now; PLAN: measurement only with exact scale),
+- [x] Measure tool (T, metric scenes only, snaps to LiDAR points): floor-to-ceiling 2.71 m vs LiDAR 2.70
+  (`web/viewer/tools/test_measure.mjs`).
+- [ ] Explorer (rest): distance measuring tool (the scale is metric now; PLAN: measurement only with exact scale),
   LiDAR point-size control, a short help text for the LiDAR keys in the tablet view; tablet build.
 - [ ] If time: per-pass appearance check (low vs high pass exposure differences).
 
