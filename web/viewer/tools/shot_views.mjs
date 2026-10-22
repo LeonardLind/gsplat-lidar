@@ -5,7 +5,7 @@ import puppeteer from "puppeteer-core";
 const [prefix = "view", posesFile, url = "http://127.0.0.1:5173/?touch=0"] = process.argv.slice(2);
 const poses = JSON.parse(fs.readFileSync(posesFile, "utf8"));
 const browser = await puppeteer.launch({
-  executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  executablePath: process.env.GSL_BROWSER ?? "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   headless: "new",
   args: ["--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist", "--window-size=1280,720"],
 });
