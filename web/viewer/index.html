@@ -21,6 +21,7 @@
     #loading.done { opacity: 0; pointer-events: none; }
     #hud { position: fixed; left: 12px; top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; max-width: 320px; }
     #hud.collapsed .help { display: none; }
+    body:not(.has-lidar) .lidar-only { display: none !important; }
     #mode { font-weight: 600; letter-spacing: .02em; }
     .help { margin-top: 6px; color: var(--muted); font-size: 12.5px; }
     .help div { display: flex; justify-content: space-between; gap: 16px; }
@@ -176,6 +177,9 @@
       <div><span>Walk / fly</span><kbd>F</kbd></div>
       <div><span>Collision on/off</span><kbd>G</kbd></div>
       <div><span>Show collision voxels</span><kbd>V</kbd></div>
+      <div class="lidar-only"><span>LiDAR on/off · LiDAR only</span><span><kbd>L</kbd> <kbd>Shift</kbd>+<kbd>L</kbd></span></div>
+      <div class="lidar-only"><span>LiDAR colours · opacity</span><span><kbd>K</kbd> <kbd>O</kbd></span></div>
+      <div class="lidar-only"><span>Cut LiDAR ceiling lower/higher</span><span><kbd>[</kbd> <kbd>]</kbd></span></div>
       <div><span>Open nearby marker</span><kbd>E</kbd></div>
       <div><span>Sound on/off</span><kbd>M</kbd></div>
       <div><span>Edit markers and blocks</span><kbd>Tab</kbd></div>

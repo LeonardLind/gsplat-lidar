@@ -93,7 +93,7 @@ def main() -> None:
             "mean_lidar_rgb": rgb.mean(axis=0).round(1).tolist()}
     (a.out.parent / "merge_info.json").write_text(json.dumps(info, indent=1))
     # what the export reads next to an oriented model: this one is in metres (LiDAR frame), z up, floor at 0
-    (a.out.parent / f"{a.out.name}_orient.json").write_text(json.dumps({"scale": "metric", "frame": "lidar", **info}, indent=1))
+    (a.out.parent / f"{a.out.name}_orient.json").write_text(json.dumps({"scale": "metric", "frame": "lidar", "lidar_npz": str(a.lidar), **info}, indent=1))
     print(json.dumps(info))
 
 

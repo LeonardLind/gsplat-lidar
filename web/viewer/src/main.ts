@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
 import { AudioBar, AudioLayer } from "./audio";
 import { InfoCard } from "./card";
+import { LidarLayer } from "./lidar";
 import { CollisionWorld, VoxelGrid } from "./collision";
 import { Editor } from "./editor";
 import { MarkerLayer, markerKind } from "./markers";
@@ -54,6 +55,18 @@ async function main(): Promise<void> {
     splat.position.set(...tf.position);
   }
   three.add(splat);
+
+  // LiDAR layer (L / Shift+L / K / O / [ ]), loaded in the background.
+  let lidar: LidarLayer | null = null;
+  if (scene.lidar?.url) {
+    LidarLayer.load(`/scene/${scene.lidar.url}`).then((l) => {
+      lidar = l;
+      three.add(l.points);
+      l.updateScale(camera, renderer.getDrawingBufferSize(new THREE.Vector2()).y); // resize() may not exist yet
+      document.body.classList.add("has-lidar");
+    }).catch((e: unknown) => status(`Could not load the LiDAR points: ${e}`));
+  }
+  const lidarNotLoaded = () => (lidar ? false : (status(scene.lidar ? "LiDAR points still loading" : "No LiDAR points in this scene"), true));
 
   let grid: VoxelGrid | null = null;
   if (scene.collision?.url) {
@@ -237,6 +250,36 @@ async function main(): Promise<void> {
       case "KeyH":
         hud.classList.toggle("collapsed");
         break;
+      case "KeyL":
+        if (lidarNotLoaded()) break;
+        if (e.shiftKey) {
+          splat.visible = !splat.visible;
+          if (!splat.visible) lidar!.visible = true;
+          status(splat.visible ? "Splat shown" : "LiDAR only (splat hidden)");
+        } else {
+          lidar!.visible = !lidar!.visible;
+          if (!lidar!.visible) splat.visible = true;
+          status(lidar!.visible ? `LiDAR on: ${lidar!.count.toLocaleString()} points` : "LiDAR off");
+        }
+        break;
+      case "KeyK":
+        if (lidarNotLoaded()) break;
+        lidar!.visible = true;
+        status(`LiDAR colours: ${lidar!.nextColour()}`);
+        break;
+      case "KeyO":
+        if (lidarNotLoaded()) break;
+        lidar!.visible = true;
+        status(`LiDAR opacity ${Math.round(lidar!.nextOpacity() * 100)} %`);
+        break;
+      case "BracketLeft":
+      case "BracketRight": {
+        if (lidarNotLoaded()) break;
+        lidar!.visible = true;
+        const c = lidar!.moveClip(e.code === "BracketLeft" ? -0.25 : 0.25);
+        status(c === null ? "LiDAR ceiling cut off" : `LiDAR cut above ${c.toFixed(2)} m`);
+        break;
+      }
       case "KeyR":
         player.placeAt(s.position[0], s.position[1], s.position[2], (s.yawDeg * Math.PI) / 180);
         status("Back to the start");
@@ -249,6 +292,7 @@ async function main(): Promise<void> {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    lidar?.updateScale(camera, renderer.getDrawingBufferSize(new THREE.Vector2()).y);
   };
   addEventListener("resize", resize);
   resize();
@@ -323,7 +367,7 @@ async function main(): Promise<void> {
       : touchMode ? (card.isOpen ? "" : markers.nearest ? `Tap or look at the marker: ${markers.nearest.title}` : "")
       : card.isOpen ?((cardMarker?.images?.length ?? 0) > 1 ? "Scroll: next picture · E: close" : "E: close")
       : markers.nearest ? `Press E: ${markers.nearest.title}` : "";
-    modeEl.textContent = `${editor.active ? "EDIT" : player.mode.toUpperCase()} · collision ${player.collide ? "on" : "off"} · scale ${scene.frame.scale}`;
+    modeEl.textContent = `${editor.active ? "EDIT" : player.mode.toUpperCase()} · collision ${player.collide ? "on" : "off"} · scale ${scene.frame.scale}${lidar?.visible ? ` · LiDAR ${lidar.colour}` : ""}`;
     renderer.render(three, camera);
   });
 }

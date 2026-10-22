@@ -176,6 +176,9 @@ def _explorer_follows(p: Project, out: Path) -> None:
     write_json(PROJECTS_DIR / "_server" / "current.json", {"project": p.name, "export": rel, "time": time.time()})
 
 
+DEFAULT_LIDAR = r"C:\dev\gsl-data\data\processed\office_lidar_5cm.npz"
+
+
 def cmd_export(a: argparse.Namespace) -> None:
     import _winapi
 
@@ -200,7 +203,8 @@ def cmd_export(a: argparse.Namespace) -> None:
     splat_file = "scene.sog" if "sog" in formats else "scene.spz"
     info = write_scene(out, f"{p.name} {clip['id']} {a.run}", splat_file, sparse, ply,
                        orient.get("scale") if orient.get("scale") in ("approximate", "metric") else "arbitrary",
-                       views_dir=p.dir / "views" / clip["id"])
+                       views_dir=p.dir / "views" / clip["id"],
+                       lidar=Path(orient.get("lidar_npz", DEFAULT_LIDAR)) if orient.get("frame") == "lidar" else None)
     print(f"   scene.json + collision.json: floor z {info['floor_z']:.2f}, camera height {info['camera_height']:.2f}, "
           f"voxel {info['voxel']:.3f}, {info['occupied']} solid voxels ({info['carved']} carved along the camera path)")
     current = p.dir / "export" / "current"

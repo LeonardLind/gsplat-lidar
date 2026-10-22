@@ -49,6 +49,8 @@ export interface SceneFile {
   markers: Marker[];
   blocks: Block[];
   sounds?: Sound[];
+  /** The LiDAR points (scenes trained in the LiDAR frame): lidar.bin, see src/lidar.ts. */
+  lidar?: { url: string; count: number; bounds: [Vec3, Vec3] };
 }
 
 /** collision.json: occupancy voxels derived from the splat (python -m app export). */

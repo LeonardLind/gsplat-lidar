@@ -31,6 +31,31 @@ class CollisionParams:
     min_count: int = 3
     margin_frac: float = 1.5  # grid extends this far (x camera height) around the camera path
     carve_radius_frac: float = 0.12
+    voxel_m: float | None = None  # fixed voxel edge in metres (metric scenes); overrides voxel_frac
+
+
+LIDAR_COLLISION = CollisionParams(min_opacity=0.0, max_scale_frac=1e9, min_count=2, voxel_m=0.08, carve_radius_frac=0.15)
+
+
+def lidar_as_ply(xyz: np.ndarray) -> dict[str, np.ndarray]:
+    """LiDAR points in the shape build_collision expects from a splat PLY: opaque, 3 cm Gaussians."""
+    n = len(xyz)
+    return {"x": xyz[:, 0], "y": xyz[:, 1], "z": xyz[:, 2], "opacity": np.full(n, 10.0, np.float32),
+            **{f"scale_{i}": np.full(n, np.log(0.03), np.float32) for i in range(3)}}
+
+
+def write_lidar_layer(out_dir: Path, xyz: np.ndarray, rgb: np.ndarray, intensity: np.ndarray) -> dict:
+    """lidar.bin for the viewer's LiDAR layer (web/viewer/src/lidar.ts): little-endian uint32 count, then
+    float32 xyz (count x 3), uint8 rgb (count x 3), uint8 intensity (count; 1st-99th percentile stretched)."""
+    lo, hi = np.percentile(intensity, [1, 99])
+    inten = np.clip((intensity.astype(np.float32) - lo) / max(hi - lo, 1) * 255, 0, 255).astype(np.uint8)
+    n = len(xyz)
+    with open(out_dir / "lidar.bin", "wb") as f:
+        f.write(np.uint32(n).tobytes())
+        f.write(np.ascontiguousarray(xyz, dtype="<f4").tobytes())
+        f.write(np.ascontiguousarray(rgb, dtype=np.uint8).tobytes())
+        f.write(inten.tobytes())
+    return {"url": "lidar.bin", "count": int(n), "bounds": [xyz.min(axis=0).round(3).tolist(), xyz.max(axis=0).round(3).tolist()]}
 
 
 def read_ply(path: Path) -> dict[str, np.ndarray]:
@@ -83,7 +108,7 @@ def build_collision(ply: dict[str, np.ndarray], cams: np.ndarray, p: CollisionPa
     scale = np.exp(np.stack([ply["scale_0"], ply["scale_1"], ply["scale_2"]], axis=1)).max(axis=1)
     floor_z = detect_floor(xyz[:, 2], cams[:, 2])
     cam_h = float(np.median(cams[:, 2] - floor_z))
-    voxel = p.voxel_frac * cam_h
+    voxel = p.voxel_m or p.voxel_frac * cam_h
 
     lo = cams.min(axis=0) - p.margin_frac * cam_h
     hi = cams.max(axis=0) + p.margin_frac * cam_h
@@ -217,12 +242,24 @@ def demo_content(cams: np.ndarray, floor_z: float, cam_h: float, images: list[st
 
 def write_scene(out_dir: Path, name: str, splat_file: str, model_dir: Path, ply_path: Path,
                 scale: str, views_dir: Path | None = None, p: CollisionParams = CollisionParams(),
-                source_ply: Path | None = None) -> dict:
+                source_ply: Path | None = None, lidar: Path | None = None) -> dict:
     """scene.json + collision.json for a trained splat. ply_path is what collision is built from (a cleaned
-    copy after cleanup); source_ply is the untouched master (defaults to ply_path)."""
+    copy after cleanup); source_ply is the untouched master (defaults to ply_path).
+
+    lidar: the LiDAR npz (app/lidar/downsample.py) of a scene trained in the LiDAR frame (app/lidar/merge.py):
+    collision then comes from the LiDAR points (true geometry, no floaters), the viewer gets a LiDAR layer
+    (lidar.bin) and the player uses real sizes."""
     cams, fwd = camera_path(model_dir)
-    ply = read_ply(ply_path)
-    collision, info = build_collision(ply, cams, p)
+    lidar_entry = None
+    if lidar is not None:
+        from app.lidar.register import load_lidar
+
+        xyz, *_ = load_lidar(lidar)  # the merge frame: floor at z = 0
+        d = np.load(lidar)
+        lidar_entry = write_lidar_layer(out_dir, xyz.astype(np.float32), d["rgb"], d["intensity"])
+        collision, info = build_collision(lidar_as_ply(xyz), cams, LIDAR_COLLISION if p == CollisionParams() else p)
+    else:
+        collision, info = build_collision(read_ply(ply_path), cams, p)
     write_json(out_dir / "collision.json", collision)
     h = info["camera_height"]
     start = cams[0]
@@ -242,12 +279,15 @@ def write_scene(out_dir: Path, name: str, splat_file: str, model_dir: Path, ply_
         "splat": {"url": splat_file, "source": str(source_ply or ply_path), "sparse": str(model_dir)},
         "collision": {"url": "collision.json"},
         "start": {"position": [float(start[0]), float(start[1]), info["floor_z"]], "yawDeg": yaw},
-        # Player sizes relative to the camera height above the floor (the scale is approximate).
-        "player": {"eyeHeight": round(h, 3), "radius": round(0.15 * h, 3), "stepHeight": round(0.2 * h, 3)},
+        # Player sizes: real ones in a metric scene, else relative to the camera height above the floor.
+        "player": {"eyeHeight": 1.6, "radius": 0.25, "stepHeight": 0.3} if scale == "metric"
+        else {"eyeHeight": round(h, 3), "radius": round(0.15 * h, 3), "stepHeight": round(0.2 * h, 3)},
         "markers": old.get("markers", []),  # keep what was placed in edit mode
         "blocks": old.get("blocks", []),
         "sounds": old.get("sounds", []),
     }
+    if lidar_entry:
+        scene["lidar"] = lidar_entry
     write_json(scene_file, scene)
     write_json(out_dir / "collision_info.json", info)
     return info
