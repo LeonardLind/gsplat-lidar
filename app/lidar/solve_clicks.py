@@ -69,6 +69,8 @@ def solve_chunk(cams_raw, bases, marks, walk, ext, room_h):
         if dp > 3 and dc > 3:
             fc = float(np.clip(dc / dp, 0.4, 2.5))
             scales += [fc * k for k in (0.9, 1.0, 1.1)]
+        if not scales:  # short stretch with clicks too close to give a scale: trust the plane-based scale
+            scales = [0.9, 1.0, 1.1]
         for f in scales:
             cf = cb * f
             for yaw in np.arange(0, 360, 3.0):
@@ -106,6 +108,7 @@ def main() -> None:
     ap.add_argument("chunks", type=Path)
     ap.add_argument("locate", type=Path)
     ap.add_argument("out", type=Path)
+    ap.add_argument("--split", default="", help="comma list of chunk ids to place stretch by stretch (between two clicks each)")
     ap.add_argument("--lidar", type=Path, default=Path(r"C:\dev\gsl-data\data\processed\office_lidar_5cm.npz"))
     a = ap.parse_args()
     t0 = time.time()
@@ -128,23 +131,34 @@ def main() -> None:
             print(f"  geometry chunk {c['id']}: {len(cams)} cameras ({time.time() - t0:.0f} s)", flush=True)
         cache.write_bytes(pickle.dumps(G))
 
-    placed = {}
+    split = {int(x) for x in a.split.split(",") if x.strip()}
+    order = ["start", "quarter", "middle", "three-quarters", "end"]
+    placed = []  # one entry per chunk, or per stretch of a split chunk
     for c in chunks:
         k = c["id"]
         mk = marks.get(str(k))
         if not mk or not G[k]["bases"]:
             print(f"  chunk {k:2d}: {'no clicks' if not mk else 'no base frame'}, skipped")
             continue
-        r = solve_chunk(G[k]["cams"], G[k]["bases"], mk, walk, ext, room_h)
-        if r is None:
-            print(f"  chunk {k:2d}: needs at least two clicks, skipped")
-            continue
-        placed[k] = r
-        print(f"  chunk {k:2d}: score {r['score']:.2f}, over-floor value {r['walk']:.2f}, clicks off by {r['click_rms_m']:.1f} m, "
-              f"scale x{r['f']:.2f} ({'planes' if r['ok'] else 'clicks'}), yaw {r['yaw']:.0f} ({time.time() - t0:.0f} s)", flush=True)
+        n = len(G[k]["cams"])
+        jobs = [((0, n - 1), mk)]
+        if k in split:
+            idx = {"start": 0, "quarter": n // 4, "middle": n // 2, "three-quarters": 3 * n // 4, "end": n - 1}
+            have = [l for l in order if l in mk]
+            jobs = [((idx[x], idx[y]), {"start": mk[x], "end": mk[y]}) for x, y in zip(have, have[1:]) if idx[y] - idx[x] >= 4]
+        for (i0, i1), sub in jobs:
+            r = solve_chunk(G[k]["cams"][i0:i1 + 1], G[k]["bases"], sub, walk, ext, room_h)
+            if r is None:
+                print(f"  chunk {k:2d} [{i0}-{i1}]: needs at least two clicks, skipped")
+                continue
+            r["chunk"], r["range"] = k, (i0, i1)
+            placed.append(r)
+            print(f"  chunk {k:2d} [{i0:3d}-{i1:3d}]: score {r['score']:.2f}, over-floor value {r['walk']:.2f}, clicks off by {r['click_rms_m']:.1f} m, "
+                  f"scale x{r['f']:.2f} ({'planes' if r['ok'] else 'clicks'}), yaw {r['yaw']:.0f} ({time.time() - t0:.0f} s)", flush=True)
 
-    out = [{"chunk": k, "model": chunks[k]["model"], "frames": [chunks[k]["first_frame"], chunks[k]["last_frame"]],
-            "M": r["M"].tolist(), "score": r["score"], "walk": r["walk"], "click_rms_m": r["click_rms_m"]} for k, r in sorted(placed.items())]
+    out = [{"chunk": r["chunk"], "range": list(r["range"]), "model": chunks[r["chunk"]]["model"],
+            "frames": [chunks[r["chunk"]]["first_frame"], chunks[r["chunk"]]["last_frame"]],
+            "M": r["M"].tolist(), "score": r["score"], "walk": r["walk"], "click_rms_m": r["click_rms_m"]} for r in placed]
     (a.out / "placements.json").write_text(json.dumps({"lidar_floor_z": floor_z, "lidar_origin": origin.tolist(), "chunks": out}))
 
     res = CELL / 2
@@ -153,9 +167,10 @@ def main() -> None:
     big = lambda m: cv2.resize(m.astype(np.uint8), (H, W), interpolation=cv2.INTER_NEAREST).T[::-1]  # noqa: E731
     img[big(floor_m) > 0] = (45, 45, 45)
     img[big(wall_m) > 0] = (150, 150, 150)
-    for k, r in sorted(placed.items()):
+    for r in placed:
+        k = r["chunk"]
         col = tuple(int(x) for x in cv2.cvtColor(np.uint8([[[(k * 137) % 180, 200, 255]]]), cv2.COLOR_HSV2BGR)[0, 0])
-        cams = mat_apply(r["M"], G[k]["cams"])
+        cams = mat_apply(r["M"], G[k]["cams"][r["range"][0]:r["range"][1] + 1])
         px = np.stack([((cams[:, 0] - ext[0]) / res).astype(int), H - 1 - ((cams[:, 1] - ext[2]) / res).astype(int)], 1)
         for x, y in px:
             if 0 <= x < W and 0 <= y < H:

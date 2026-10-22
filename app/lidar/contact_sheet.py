@@ -25,9 +25,12 @@ def main() -> None:
     _, floor_m, wall_m = walkable_map(lid, ext)
     P = 420  # panel size in pixels
     panels = []
+    by_chunk: dict[int, list] = {}
     for c in pl["chunks"]:
-        k = c["chunk"]
-        cams = mat_apply(np.array(c["M"]), G[k]["cams"])
+        by_chunk.setdefault(c["chunk"], []).append(c)
+    for k, parts in by_chunk.items():
+        c = {"score": min(p["score"] for p in parts), "click_rms_m": max(p["click_rms_m"] for p in parts)}
+        cams = np.vstack([mat_apply(np.array(p["M"]), G[k]["cams"][p.get("range", [0, len(G[k]["cams"]) - 1])[0]:p.get("range", [0, len(G[k]["cams"]) - 1])[1] + 1]) for p in parts])
         pts = [np.array([m["x"], m["y"]]) for m in marks.get(str(k), {}).values()]
         allp = np.vstack([cams[:, :2]] + ([np.array(pts)] if pts else []))
         lo, hi = allp.min(axis=0) - 3, allp.max(axis=0) + 3
@@ -53,7 +56,8 @@ def main() -> None:
             col = (int(255 * (1 - t)), 80, int(255 * t))  # BGR: blue at the start, red at the end
             cv2.circle(img, pix(p[:2]), 3, col, -1)
         for label, m in marks.get(str(k), {}).items():
-            col = {"start": (0, 255, 0), "middle": (0, 255, 255), "end": (0, 120, 255)}[label]
+            col = {"start": (0, 255, 0), "quarter": (0, 255, 255), "middle": (0, 255, 255), "three-quarters": (0, 255, 255),
+                   "end": (0, 120, 255)}[label]
             cv2.circle(img, pix((m["x"], m["y"])), 9, col, 2)
             cv2.putText(img, label[0], (pix((m["x"], m["y"]))[0] + 10, pix((m["x"], m["y"]))[1] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, col, 1)
         cv2.putText(img, f"chunk {k}  score {c['score']:.2f}  clicks off {c['click_rms_m']:.1f} m", (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
@@ -65,7 +69,7 @@ def main() -> None:
         panels.append(np.zeros((P, P, 3), np.uint8))
     rows = [np.hstack(panels[i:i + cols]) for i in range(0, len(panels), cols)]
     cv2.imwrite(str(out), np.vstack(rows))
-    print(f"{len(pl['chunks'])} panels -> {out}")
+    print(f"{len(by_chunk)} panels -> {out}")
 
 
 if __name__ == "__main__":
