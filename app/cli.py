@@ -199,7 +199,7 @@ def cmd_export(a: argparse.Namespace) -> None:
     orient = read_json(sparse.parent / f"{sparse.name}_orient.json")
     splat_file = "scene.sog" if "sog" in formats else "scene.spz"
     info = write_scene(out, f"{p.name} {clip['id']} {a.run}", splat_file, sparse, ply,
-                       "approximate" if orient.get("scale") == "approximate" else "arbitrary",
+                       orient.get("scale") if orient.get("scale") in ("approximate", "metric") else "arbitrary",
                        views_dir=p.dir / "views" / clip["id"])
     print(f"   scene.json + collision.json: floor z {info['floor_z']:.2f}, camera height {info['camera_height']:.2f}, "
           f"voxel {info['voxel']:.3f}, {info['occupied']} solid voxels ({info['carved']} carved along the camera path)")
