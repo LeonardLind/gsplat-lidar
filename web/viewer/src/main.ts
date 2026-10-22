@@ -58,12 +58,14 @@ async function main(): Promise<void> {
 
   // LiDAR layer (L / Shift+L / K / O / [ ]), loaded in the background.
   let lidar: LidarLayer | null = null;
+  let onLidarLoaded: (() => void) | null = null;
   if (scene.lidar?.url) {
     LidarLayer.load(`/scene/${scene.lidar.url}`).then((l) => {
       lidar = l;
       three.add(l.points);
       l.updateScale(camera, renderer.getDrawingBufferSize(new THREE.Vector2()).y); // resize() may not exist yet
       document.body.classList.add("has-lidar");
+      onLidarLoaded?.(); // the touch controls may not exist yet: they register themselves below
     }).catch((e: unknown) => status(`Could not load the LiDAR points: ${e}`));
   }
   const lidarNotLoaded = () => (lidar ? false : (status(scene.lidar ? "LiDAR points still loading" : "No LiDAR points in this scene"), true));
@@ -194,6 +196,8 @@ async function main(): Promise<void> {
         },
       })
     : null;
+  onLidarLoaded = () => touch?.addLayerSwitch((k) => { splat.visible = k !== "lidar"; lidar!.visible = k !== "splat"; });
+  if (lidar) onLidarLoaded();
 
   canvas.addEventListener("click", () => {
     void audio.unlock(scene.sounds ?? []);

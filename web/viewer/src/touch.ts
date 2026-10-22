@@ -2,6 +2,7 @@
 //   left stick   move (push it to the edge to run / fly fast)
 //   right stick  look (rate based); dragging anywhere else on the picture also looks around
 //   Walk | Drone switch (top right); Jump button in walk mode, up / down buttons in drone mode
+//   Splat | Both | LiDAR switch below it, for scenes with LiDAR points (addLayerSwitch)
 //   a tap on empty picture calls onTap (closes an open info card, unlocks audio)
 // The controls write into player.analog, which Player.update reads together with the keyboard.
 
@@ -98,7 +99,7 @@ export class TouchControls {
   private droneBtns: HTMLElement;
 
   constructor(
-    host: HTMLElement,
+    private host: HTMLElement,
     private player: Player,
     canvas: HTMLElement,
     private opts: { onTap: () => void; onMode?: (m: MoveMode) => void },
@@ -133,6 +134,18 @@ export class TouchControls {
 
     this.dragLook(canvas);
     this.showMode();
+  }
+
+  /** Splat | Both | LiDAR, under the Walk | Drone switch. */
+  addLayerSwitch(onPick: (k: "splat" | "both" | "lidar") => void, initial: "splat" | "both" | "lidar" = "splat"): void {
+    const sw = el("div", "tswitch tlayers", this.host);
+    const btns = { splat: el("button", "", sw, "Splat"), both: el("button", "", sw, "Both"), lidar: el("button", "", sw, "LiDAR") };
+    const pick = (k: "splat" | "both" | "lidar") => {
+      for (const [n, b] of Object.entries(btns)) b.classList.toggle("on", n === k);
+      onPick(k);
+    };
+    for (const [n, b] of Object.entries(btns)) b.addEventListener("click", () => pick(n as "splat" | "both" | "lidar"));
+    pick(initial);
   }
 
   private upBtn!: HTMLButtonElement;

@@ -155,6 +155,7 @@
       background: var(--panel); border: 1px solid var(--line); pointer-events: auto; }
     .tswitch button { border: 0; background: transparent; color: var(--muted); font: 600 14px system-ui, sans-serif; padding: 9px 18px; border-radius: 999px; touch-action: manipulation; }
     .tswitch button.on { background: rgba(255, 255, 255, .17); color: #fff; }
+    .tswitch.tlayers { top: calc(66px + env(safe-area-inset-top)); }
     .tbtns { position: absolute; bottom: calc(40px + env(safe-area-inset-bottom)); right: calc(28px + 148px + 20px + env(safe-area-inset-right)); display: none; flex-direction: column; gap: 14px; }
     .tbtn { width: 68px; height: 68px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .4); background: rgba(20, 22, 28, .4); color: #fff; font: 600 15px system-ui, sans-serif;
       backdrop-filter: blur(6px); pointer-events: auto; touch-action: none; }
