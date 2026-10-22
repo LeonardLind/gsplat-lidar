@@ -28,7 +28,8 @@ open task.** Tick tasks here (`[x]`) when done and add one line on the outcome.
 - [ ] Training queue (`scripts/train_queue.py lidar/queue.json`, watchdog): `rigid_base_150k`,
   `rigid_depth_v2_150k` (depth loss, NaN fix), `rigid_depth_pose1e5_150k`. Drift fix:
   `--strategy.noise-injection-stop-iter 25000`. Restart the queue with the same command after a reboot.
-- [ ] Compare (rules above), export the winner as current, screenshots of fixed views into
+- [x] Compared: `rigid_depth_v2_150k` (17.77 dB, no fog near the camera) beats `rigid_base_150k` (17.69 dB). It is current.
+- [ ] (old) Compare (rules above), export the winner as current, screenshots of fixed views into
   `projects/office-x4/review/` (not in git), log in HANDOFF.
 
 ## Phase 2 (days 1-2): one consistent camera solve with LiDAR position priors (the real fix)
