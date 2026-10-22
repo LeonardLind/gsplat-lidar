@@ -9,6 +9,8 @@ environment variables, which the workers inherit:
     GSL_HOLDOUT_EVERY  every N-th 360 frame goes to the test split with all its views
     GSL_ONLY_PREFIX    debugging: keep only view folders with these prefixes (comma list)
     GSL_EVAL_PREFIX    evaluate only on view folders with these prefixes (comparable PSNR across view sets)
+    GSL_DEPTH_POINTS   npz from app/lidar/visibility.py: the LiDAR points each image sees become the depth-loss
+                       targets (parser.point_indices); use with --depth-loss
 """
 from __future__ import annotations
 
@@ -24,6 +26,23 @@ MASK_DIR = Path(os.environ["GSL_MASK_DIR"]) if os.environ.get("GSL_MASK_DIR") el
 HOLDOUT_EVERY = int(os.environ.get("GSL_HOLDOUT_EVERY", "0"))
 ONLY_PREFIX = tuple(p for p in os.environ.get("GSL_ONLY_PREFIX", "").split(",") if p)
 EVAL_PREFIX = tuple(p for p in os.environ.get("GSL_EVAL_PREFIX", "").split(",") if p)
+DEPTH_POINTS = os.environ.get("GSL_DEPTH_POINTS", "")
+
+
+def use_depth_points(parser, path: str) -> None:
+    """Replace the SfM-track based point_indices with the LiDAR points each image sees (once per parser)."""
+    if getattr(parser, "_gsl_depth_points", None) == path:
+        return
+    d = np.load(path)
+    names, off, idx = d["names"], d["offsets"], d["indices"]
+    known = set(parser.image_names)
+    parser.point_indices = {str(n): idx[off[k]:off[k + 1]] for k, n in enumerate(names) if str(n) in known}
+    missing = len(known) - len(parser.point_indices)
+    if missing:
+        raise SystemExit(f"GSL_DEPTH_POINTS: {missing} images have no LiDAR depth points ({path})")
+    parser._gsl_depth_points = path
+    print(f"[gsl] depth targets: LiDAR points per image from {path} "
+          f"(median {int(np.median(np.diff(off)))} points per image)")
 
 _static_masks: dict[str, np.ndarray | None] = {}
 
@@ -43,6 +62,8 @@ def load_mask(image_name: str) -> np.ndarray | None:
 
 class GslDataset(gs_colmap.Dataset):
     def __init__(self, parser, split="train", patch_size=None, load_depths=False):
+        if DEPTH_POINTS and load_depths:
+            use_depth_points(parser, DEPTH_POINTS)
         super().__init__(parser, split, patch_size, load_depths)
         if HOLDOUT_EVERY > 0:
             frames = [Path(n).stem for n in parser.image_names]
