@@ -24,10 +24,10 @@ open task.** Tick tasks here (`[x]`) when done and add one line on the outcome.
 
 ## Phase 1 (tonight): finish the two joined runs, pick the better one
 
-- [ ] `train/068+069/rigid_lidar_poseopt_150k` (rigid placement, drift fix, pose-opt) -> exports itself.
-  Check at 75k that the Gaussians stay inside the office (drift fix).
-- [ ] `train/068+069/rigid_lidar_depth_150k` (same + LiDAR depth loss, `GSL_DEPTH_POINTS`), queued after it
-  (`scratchpad/queue_depth.ps1`, log `lidar/train_depth.log`).
+- [x] `train/068+069/rigid_lidar_poseopt_150k`: DIVERGED (pose-opt lr 1e-4, loss 0.1 -> 17 at ~62k). Stopped.
+- [ ] Training queue (`scripts/train_queue.py lidar/queue.json`, watchdog): `rigid_base_150k`,
+  `rigid_depth_v2_150k` (depth loss, NaN fix), `rigid_depth_pose1e5_150k`. Drift fix:
+  `--strategy.noise-injection-stop-iter 25000`. Restart the queue with the same command after a reboot.
 - [ ] Compare (rules above), export the winner as current, screenshots of fixed views into
   `projects/office-x4/review/` (not in git), log in HANDOFF.
 

@@ -57,6 +57,24 @@ def _selective_adam_init_compat(self, *args, fused=None, **kwargs):
 
 SelectiveAdam.__init__ = _selective_adam_init_compat
 
+# --depth-loss: gsplat's depth_l1_loss computes 1/depth inside torch.where, so where the rendered depth is 0 (no
+# surface yet) the backward pass is inf * 0 = NaN and poisons every Gaussian (LiDAR depth run of 2026-10-22: loss
+# nan at step 600, then MCMC's multinomial asserted). Clamp the rendered depth to 10 cm before inverting and
+# ignore targets where nothing has been rendered yet.
+import torch  # noqa: E402
+import gsplat.losses as gs_losses  # noqa: E402
+
+
+def _depth_l1_loss_safe(pred_depth, gt_depth, scene_scale: float = 1.0):
+    valid = (pred_depth > 1e-3) & (gt_depth > 0)
+    disp = 1.0 / pred_depth.clamp(min=0.1)
+    disp_gt = 1.0 / gt_depth.clamp(min=0.1)
+    err = torch.where(valid, (disp - disp_gt).abs(), torch.zeros_like(disp))
+    return err.sum() / valid.sum().clamp(min=1) * scene_scale
+
+
+gs_losses.depth_l1_loss = _depth_l1_loss_safe
+
 PROGRESS = os.environ.get("GSL_PROGRESS_FILE")
 CONTROL = os.environ.get("GSL_CONTROL_FILE")
 
