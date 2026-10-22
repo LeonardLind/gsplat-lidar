@@ -50,6 +50,30 @@ def lookup(walk, ext, xy):
     return v
 
 
+def parse_heights(spec: str) -> dict[int, float]:
+    """'0-8:1.13,9-14:2.22' -> {chunk id: camera height above the floor in m}."""
+    out = {}
+    for part in filter(None, spec.split(",")):
+        ids, h = part.split(":")
+        lo, _, hi = ids.partition("-")
+        for k in range(int(lo), int(hi or lo) + 1):
+            out[k] = float(h)
+    return out
+
+
+def pick_base(cams_raw, bases, height):
+    """The two up candidates are usually the same axis flipped (floor <-> ceiling), and a stretch with two clicks
+    cannot tell them apart (the flipped one is a mirror image that fits two points equally well). The known camera
+    height of the pass decides."""
+    return [min(bases, key=lambda b: abs(np.median(mat_apply(b["M0"], cams_raw)[:, 2]) - height))]
+
+
+def set_height(M, cams_raw, height):
+    M = M.copy()
+    M[2, 3] += height - float(np.median(mat_apply(M, cams_raw)[:, 2]))
+    return M
+
+
 def solve_chunk(cams_raw, bases, marks, walk, ext, room_h):
     n = len(cams_raw)
     idx = {"start": 0, "quarter": n // 4, "middle": n // 2, "three-quarters": 3 * n // 4, "end": n - 1}
@@ -109,6 +133,8 @@ def main() -> None:
     ap.add_argument("locate", type=Path)
     ap.add_argument("out", type=Path)
     ap.add_argument("--split", default="", help="comma list of chunk ids to place stretch by stretch (between two clicks each)")
+    ap.add_argument("--heights", default="", help="camera height of the pass per chunk, e.g. '0-8:1.13,9-14:2.22' "
+                    "(picks the right-way-up base and sets the height; without it the floor/ceiling planes decide)")
     ap.add_argument("--lidar", type=Path, default=Path(r"C:\dev\gsl-data\data\processed\office_lidar_5cm.npz"))
     a = ap.parse_args()
     t0 = time.time()
@@ -132,6 +158,7 @@ def main() -> None:
         cache.write_bytes(pickle.dumps(G))
 
     split = {int(x) for x in a.split.split(",") if x.strip()}
+    heights = parse_heights(a.heights)
     order = ["start", "quarter", "middle", "three-quarters", "end"]
     placed = []  # one entry per chunk, or per stretch of a split chunk
     for c in chunks:
@@ -146,11 +173,14 @@ def main() -> None:
             idx = {"start": 0, "quarter": n // 4, "middle": n // 2, "three-quarters": 3 * n // 4, "end": n - 1}
             have = [l for l in order if l in mk]
             jobs = [((idx[x], idx[y]), {"start": mk[x], "end": mk[y]}) for x, y in zip(have, have[1:]) if idx[y] - idx[x] >= 4]
+        bases = pick_base(G[k]["cams"], G[k]["bases"], heights[k]) if k in heights else G[k]["bases"]
         for (i0, i1), sub in jobs:
-            r = solve_chunk(G[k]["cams"][i0:i1 + 1], G[k]["bases"], sub, walk, ext, room_h)
+            r = solve_chunk(G[k]["cams"][i0:i1 + 1], bases, sub, walk, ext, room_h)
             if r is None:
                 print(f"  chunk {k:2d} [{i0}-{i1}]: needs at least two clicks, skipped")
                 continue
+            if k in heights:
+                r["M"] = set_height(r["M"], G[k]["cams"][i0:i1 + 1], heights[k])
             r["chunk"], r["range"] = k, (i0, i1)
             placed.append(r)
             print(f"  chunk {k:2d} [{i0:3d}-{i1:3d}]: score {r['score']:.2f}, over-floor value {r['walk']:.2f}, clicks off by {r['click_rms_m']:.1f} m, "
