@@ -54,7 +54,11 @@ mapper can use the positions as priors to bridge weak links.
   `app/stages/sfm.py model_quality`), then `pose_prior_mapper` if the global result still jumps. Bring the
   result into the LiDAR frame (Umeyama camera centres -> priors, then ICP onto the LiDAR with the pass-height
   check), compare with `merged_rigid` (camera heights, ICP inliers, number of registered frames).
-- [ ] 2d. Merge (LiDAR points as start), depth points, train with the Phase 1 winner's settings; compare;
+- [ ] 2d. Tool ready: `python -m app.lidar.from_solve <solve sparse/N> lidar/merged_rigid/sparse/0 lidar/solve_<name>`
+  (sim3 to the reference cameras, ICP with height check, LiDAR points, checks in from_solve.json), then
+  `app.lidar.visibility`, then add a queue job (depth, like rigid_depth_v2). Matching: 219 s/block x 201
+  blocks = ~12 h from 00:30 -> ~12:45 on 2026-10-23, then global_mapper, then pose_prior_mapper.
+- [ ] (was) 2d. Merge (LiDAR points as start), depth points, train with the Phase 1 winner's settings; compare;
   export the winner.
 
 - [ ] 2e. **Allowed by the user (2026-10-22): a full SfM re-run with the LiDAR as the skeleton**, if Phase 2
