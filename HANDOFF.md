@@ -3,6 +3,7 @@
 ## Office PC run log (2026-10-19), newest first
 Office PC: Core Ultra 9 285, 64 GB, RTX 5060 8 GB (sm_120), driver 616.92. Goal: joint 068+069 run with the current defaults (no LiDAR yet).
 
+- **2026-10-22 ~19:45 `rigid_base_150k` at 75k is healthy and the best so far: held-out 17.46 dB (19.0 dB without the two down views), SSIM 0.70, LPIPS 0.74** (vs 15.7 dB for the stretch-placement run at 75k). Drift fix works (`--strategy.noise-injection-stop-iter 25000`): no explosion; but only 46 % of the Gaussians are inside the office box (the ones that faded before 25k stay where noise left them) and 5 % have opacity > 0.5, so a LiDAR-based cleanup of the far ones (Phase 3) should cost nothing visually.
 - **2026-10-22 17:00-17:45 (user away from here on, see ROADMAP_4DAYS.md) Pose-opt run diverged; depth loss NaN fixed; training queue with watchdog.**
   - `rigid_lidar_poseopt_150k` (`--strategy.refine-stop-iter 150000 --pose-opt --pose-opt-lr 1e-4`): loss rose from ~0.1 after step 25k and exploded at ~62k (0.1 -> 17), Gaussians at 1e12 m, held-out 7 dB at 75k. Stopped. Likely the 10x pose-opt learning rate (poses drift, splat chases them). Not used again; pose-opt is retried once at gsplat's default lr 1e-5.
   - Drift fix from now on: `--strategy.noise-injection-stop-iter 25000` (MCMC noise stops when relocation stops, so faded Gaussians stay put instead of random-walking away).
