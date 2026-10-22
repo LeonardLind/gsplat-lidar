@@ -59,6 +59,34 @@ function scenePlugin(): Plugin {
           }
         });
       });
+      // The "where was this?" page (locate.html): GET/POST /api/locate <-> projects/office-x4/lidar/locate.json
+      server.middlewares.use("/api/locate", (req, res) => {
+        const file = path.resolve("../../projects/office-x4/lidar/locate.json");
+        if (req.method === "GET") {
+          res.setHeader("Content-Type", "application/json");
+          res.end(fs.existsSync(file) ? fs.readFileSync(file) : "{}");
+          return;
+        }
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          try {
+            const parsed = JSON.parse(body);
+            fs.mkdirSync(path.dirname(file), { recursive: true });
+            fs.writeFileSync(file, JSON.stringify(parsed, null, 2));
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ ok: true }));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ ok: false, error: String(e) }));
+          }
+        });
+      });
       server.middlewares.use("/api/scene", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
@@ -97,7 +125,7 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      input: { explorer: path.resolve("index.html"), studio: path.resolve("studio.html"), clean: path.resolve("clean.html"), align: path.resolve("align.html") },
+      input: { explorer: path.resolve("index.html"), studio: path.resolve("studio.html"), clean: path.resolve("clean.html"), align: path.resolve("align.html"), locate: path.resolve("locate.html") },
     },
   },
 });

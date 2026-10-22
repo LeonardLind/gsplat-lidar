@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Where was this?</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { --bg: #101114; --panel: #16181d; --text: #e8eaf0; --muted: #9aa1b2; --accent: #2f9bff; --line: rgba(255,255,255,.14);
+      font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); }
+    html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+    #wrap { display: grid; grid-template-columns: 760px 1fr; height: 100vh; }
+    #list { overflow-y: auto; padding: 10px 12px 60px; background: var(--panel); border-right: 1px solid var(--line); }
+    #plan { width: 100%; height: 100vh; display: block; cursor: crosshair; }
+    h1 { font-size: 16px; margin: 4px 0; } .hint { color: var(--muted); font-size: 12.5px; margin: 4px 0 10px; }
+    .chunk { border: 1px solid var(--line); border-radius: 10px; margin: 10px 0; padding: 8px 10px; }
+    .chunk h2 { font-size: 14px; margin: 0 0 6px; display: flex; gap: 8px; align-items: center; } .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .moment { display: grid; grid-template-columns: 74px 1fr; gap: 8px; align-items: start; margin: 6px 0; padding: 4px; border-radius: 8px; }
+    .moment.active { background: rgba(47,155,255,.16); outline: 1px solid var(--accent); }
+    .moment.done .lbl b::after { content: " ✓"; color: #7bd88f; }
+    .lbl { font-size: 12.5px; color: var(--muted); } .lbl b { color: var(--text); display: block; margin-bottom: 4px; }
+    button { background: rgba(255,255,255,.07); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px; }
+    button.on { border-color: var(--accent); background: rgba(47,155,255,.25); }
+    .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .thumbs div { position: relative; } .thumbs img { width: 100%; display: block; border-radius: 4px; transition: transform .12s; transform-origin: bottom left; }
+    .thumbs div:hover { z-index: 5; } .thumbs div:hover img { transform: scale(2.6); box-shadow: 0 6px 24px rgba(0,0,0,.6); }
+    .thumbs span { position: absolute; left: 3px; top: 2px; font-size: 10px; background: rgba(0,0,0,.55); padding: 0 4px; border-radius: 3px; }
+    #bar { position: fixed; left: 0; bottom: 0; width: 760px; box-sizing: border-box; padding: 8px 12px; background: #0c0d10; border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: center; z-index: 10; }
+    #bar .primary { border-color: var(--accent); background: rgba(47,155,255,.25); } #msg { color: #7bd88f; font-size: 12.5px; }
+    #help { position: fixed; right: 12px; top: 12px; background: rgba(12,13,16,.9); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; max-width: 330px; font-size: 12.5px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="list"></div>
+    <canvas id="plan"></canvas>
+  </div>
+  <div id="bar"><button id="save" class="primary">Save</button><span id="count"></span><span id="msg"></span></div>
+  <div id="help"><b>How</b>: pick a photo row on the left (the four pictures are what the camera saw: left, front, right, back). Then <b>click on the plan</b> where it was taken. <b>Click and drag</b> from that spot towards what the <i>front</i> picture shows to also set the direction. Mark at least the <b>start</b> and the <b>end</b> of every chunk. Wheel = zoom, right-drag = pan.</div>
+  <script type="module" src="/src/locate/main.ts"></script>
+</body>
+</html>

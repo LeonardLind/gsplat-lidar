@@ -1,6 +1,8 @@
 // Hand alignment of an SfM piece to the LiDAR floor plan (2D): the user drags the piece (camera path + points) over
 // the plan; yaw, scale, shift and a mirror (flip up/down) are saved to /api/align/<name>.
 
+export {}; // a module of its own: the other pages declare the same helper names
+
 interface Plan { url: string; x0: number; x1: number; y0: number; y1: number; res: number }
 interface Data {
   name: string; plan: Plan; cams: number[][]; pts: number[][]; room_height: number; model: string;
