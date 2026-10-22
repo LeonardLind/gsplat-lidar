@@ -69,7 +69,17 @@ def main() -> None:
 
     pts, centres, Ms = base_frames(Path(reg["model"]), room_h)
     best = reg["all"][0]
-    M0 = Ms[best["up"]]
+    # Which "up" to start from: for a short walk every placement scores 1.0, so the automatic choice means nothing.
+    # Take the first candidate whose cameras are all above the floor (5th percentile >= 0.3 m) and whose floor and
+    # ceiling planes are well supported (the camera-down candidate, with planes > 5 deg apart, is the last resort).
+    up_i = best["up"]
+    for i, M in enumerate(Ms):
+        z = mat_apply(M, centres)[:, 2]
+        flat = abs(float(np.linalg.det(M[:3, :3]))) > 0 and np.percentile(z, 95) < room_h
+        if i < 2 and flat and np.percentile(z, 5) >= 0.3:
+            up_i = i
+            break
+    M0 = Ms[up_i]
     cams = mat_apply(M0, centres)
     p = mat_apply(M0, pts)
     near = cKDTree(cams[:, :2]).query(p[:, :2], k=1)[0] < 4.0
@@ -77,18 +87,22 @@ def main() -> None:
     p = p[np.random.default_rng(0).permutation(len(p))[:25000]]
     # the automatic result in the base frame: x_lidar = f * Rz(yaw) * x_base + shift (shift as found by the search)
     M = np.array(reg["sim3_piece_to_lidar"])
-    Mb = M @ np.linalg.inv(M0)  # base frame -> LiDAR frame
-    s = float(np.cbrt(abs(np.linalg.det(Mb[:3, :3]))))
-    yaw = float(np.degrees(np.arctan2(Mb[1, 0], Mb[0, 0])))
+    if up_i == best["up"]:  # the automatic result is in this base frame: start the page from it
+        Mb = M @ np.linalg.inv(M0)  # base frame -> LiDAR frame
+        s = float(np.cbrt(abs(np.linalg.det(Mb[:3, :3]))))
+        yaw = float(np.degrees(np.arctan2(Mb[1, 0], Mb[0, 0])))
+        tx, ty = float(Mb[0, 3]), float(Mb[1, 3])
+    else:  # otherwise start in the middle of the plan
+        s, yaw, tx, ty = 1.0, 0.0, float((x0 + x1) / 2), float((y0 + y1) / 2)
     data = {"name": a.name, "room_height": room_h,
             "plan": {"url": "plan.png", "x0": x0, "x1": x1, "y0": y0, "y1": y1, "res": RES},
             "cams": np.round(cams[:, :3], 3).tolist(), "pts": np.round(p[:, :2], 3).tolist(),
-            "up_candidates": len(Ms), "init_up": best["up"],
-            "init": {"yaw": yaw, "scale": s, "tx": float(Mb[0, 3]), "ty": float(Mb[1, 3]), "mirror": False},
+            "up_candidates": len(Ms), "init_up": up_i,
+            "init": {"yaw": yaw, "scale": s, "tx": tx, "ty": ty, "mirror": False},
             "model": reg["model"]}
     (a.out / f"{a.name}.json").write_text(json.dumps(data))
-    print(f"plan {W}x{H}px; piece {a.name}: {len(cams)} cameras, {len(p):,} points; initial yaw {yaw:.1f}, scale {s:.3f}, "
-          f"shift ({Mb[0, 3]:.2f}, {Mb[1, 3]:.2f}) -> {a.out}")
+    print(f"plan {W}x{H}px; piece {a.name}: {len(cams)} cameras, {len(p):,} points; up candidate {up_i}; initial yaw "
+          f"{yaw:.1f}, scale {s:.3f}, shift ({tx:.2f}, {ty:.2f}) -> {a.out}")
 
 
 if __name__ == "__main__":
