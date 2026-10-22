@@ -81,3 +81,11 @@ mapper can use the positions as priors to bridge weak links.
 
 Everything stops if this VS Code / Claude session is closed, the PC restarts (Windows Update), or a tool call
 waits for a permission prompt. Recurring heartbeats expire after 7 days.
+
+Windows Update on this PC is managed by company IT (Intune): pausing is disabled by policy
+(`SetDisablePauseUXAccess`), updates install automatically at 03:00 with a 5-day deadline + 2-day grace and
+may restart outside the active hours (10-19). Claude did not and must not override that policy. Checked
+2026-10-22 18:2x: no restart pending, only Dell driver updates waiting; the October security update (9-day
+deferral) can arrive any day. **If the PC restarted:** log in, open VS Code in this repo, tell Claude "continue
+the 4-day roadmap". Everything up to the last milestone is committed and pushed; a training run that was cut
+off is simply restarted (its folder is replaced by a new one with a suffix).
