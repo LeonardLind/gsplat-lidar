@@ -35,6 +35,30 @@ function scenePlugin(): Plugin {
           res.end(JSON.stringify({ ok: false, error: String(e) }));
         });
       });
+      // The LiDAR alignment page (align.html) saves a hand alignment: POST /api/align/<piece> -> projects/<p>/lidar/align_<piece>.json
+      server.middlewares.use("/api/align", (req, res) => {
+        const piece = decodeURIComponent((req.url ?? "").split("?")[0]).replace(/^\/+/, "").replace(/[^A-Za-z0-9._-]+/g, "_");
+        if (req.method !== "POST" || !piece) {
+          res.statusCode = 400;
+          res.end();
+          return;
+        }
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          try {
+            const parsed = JSON.parse(body);
+            const dir = path.resolve("../../projects/office-x4/lidar");
+            fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(dir, `align_${piece}.json`), JSON.stringify(parsed, null, 2));
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ ok: true }));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ ok: false, error: String(e) }));
+          }
+        });
+      });
       server.middlewares.use("/api/scene", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
@@ -73,7 +97,7 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      input: { explorer: path.resolve("index.html"), studio: path.resolve("studio.html"), clean: path.resolve("clean.html") },
+      input: { explorer: path.resolve("index.html"), studio: path.resolve("studio.html"), clean: path.resolve("clean.html"), align: path.resolve("align.html") },
     },
   },
 });

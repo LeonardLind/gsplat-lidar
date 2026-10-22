@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Align to LiDAR</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { --bg: #101114; --panel: rgba(20, 22, 28, 0.94); --text: #e8eaf0; --muted: #9aa1b2; --accent: #2f9bff; --line: rgba(255,255,255,.14);
+      font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); }
+    html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+    #view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; cursor: grab; }
+    #view.moving { cursor: move; }
+    #panel { position: fixed; right: 12px; top: 12px; width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; max-height: calc(100vh - 24px); overflow: auto; }
+    h1 { font-size: 15px; margin: 0 0 4px; } .hint { color: var(--muted); font-size: 12.5px; margin: 6px 0; }
+    label { display: grid; grid-template-columns: 70px 1fr 74px; gap: 8px; align-items: center; margin: 6px 0; font-size: 13px; color: var(--muted); }
+    input[type=range] { width: 100%; } input[type=number] { width: 100%; box-sizing: border-box; background: rgba(0,0,0,.3); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px 5px; }
+    button { background: rgba(255,255,255,.07); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; margin: 3px 3px 3px 0; }
+    button.primary { border-color: var(--accent); background: rgba(47,155,255,.2); }
+    .score { margin: 8px 0; padding: 8px; border-radius: 8px; background: rgba(0,0,0,.28); font-variant-numeric: tabular-nums; }
+    .score b { font-size: 18px; } kbd { font: 11px ui-monospace, monospace; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; }
+    #msg { color: #7bd88f; min-height: 18px; font-size: 12.5px; }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="panel">
+    <h1>Align the piece to the LiDAR plan</h1>
+    <div class="hint" id="name"></div>
+    <div class="hint">Grey plan = the LiDAR (dark = floor, light = walls and furniture). Green dots = where the camera walked, red = 3D points the camera saw. Move the piece until the walk stays on the floor and the red points sit on walls.</div>
+    <div class="score" id="score"></div>
+    <label>Yaw<input id="yaw" type="range" min="-180" max="180" step="0.1"><input id="yawn" type="number" step="0.1"></label>
+    <label>Scale<input id="scale" type="range" min="0.5" max="1.6" step="0.002"><input id="scalen" type="number" step="0.002"></label>
+    <label>Shift X<input id="tx" type="range" step="0.05"><input id="txn" type="number" step="0.05"></label>
+    <label>Shift Y<input id="ty" type="range" step="0.05"><input id="tyn" type="number" step="0.05"></label>
+    <div>
+      <button id="mirror">Mirror (flip up/down)</button>
+      <button id="points">Hide points</button>
+      <button id="reset">Reset to automatic</button>
+    </div>
+    <div class="hint"><kbd>drag</kbd> move the piece · <kbd>right-drag</kbd> pan · <kbd>wheel</kbd> zoom · <kbd>Q</kbd>/<kbd>E</kbd> rotate (<kbd>Shift</kbd> = fine) · <kbd>Z</kbd>/<kbd>X</kbd> scale · <kbd>M</kbd> mirror</div>
+    <button id="save" class="primary">Save this alignment</button>
+    <div id="msg"></div>
+  </div>
+  <script type="module" src="/src/align/main.ts"></script>
+</body>
+</html>
