@@ -38,6 +38,10 @@ Why: the walk falls apart because the original matching never compared the low a
 LiDAR frame from the joined model, so (a) nearby images from other passes can be found and matched, and (b) the
 mapper can use the positions as priors to bridge weak links.
 
+- [x] 2a+2b done 2026-10-22 18:xx: `aliked_prior/database.db` has priors for 1271 + 23 interpolated frames
+  (237 without); `aliked_prior/pairs_spatial.txt` 245 657 pairs (227k cross-pass/revisit, max 40 per image,
+  ~400 per frame). `scripts/phase2_prior_solve.py` (started, waits for the training queue) does 2b matching
+  + 2c global_mapper + pose_prior_mapper, report `aliked_prior/phase2_report.json`, log `aliked_prior/phase2.log`.
 - [ ] 2a. Copy `aliked_cpu` (database with the weak-link and revisit pairs) to `aliked_prior`; write a position
   prior per image (LiDAR frame, from `lidar/merged_rigid`; frames in no model: interpolated in time from their
   neighbours, larger uncertainty).
