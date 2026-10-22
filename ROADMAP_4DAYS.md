@@ -51,6 +51,16 @@ mapper can use the positions as priors to bridge weak links.
 - [ ] 2d. Merge (LiDAR points as start), depth points, train with the Phase 1 winner's settings; compare;
   export the winner.
 
+- [ ] 2e. **Allowed by the user (2026-10-22): a full SfM re-run with the LiDAR as the skeleton**, if Phase 2
+  still fails or looks bad. E.g. fresh matching with pairs chosen from the LiDAR-frame positions (spatial +
+  view overlap, cross-pass), mapping with position priors from the start (`pose_prior_mapper`), or poses
+  fixed from the LiDAR-frame solve and only triangulation + bundle adjustment with the priors. Feature
+  extraction can be reused (the databases hold the ALIKED features; re-extracting costs ~6 h CPU and is only
+  worth it if the features themselves are the problem).
+  **The current plan and every result so far must stay reviewable:** the re-run writes only to new folders
+  (`sfm/068+069/lidar_rerun*`, `lidar/rerun*`, `train/068+069/rerun_*`, `export/068+069/rerun_*`); the best
+  pre-re-run export is kept and listed in HANDOFF next to the re-run's, so the user can compare both.
+
 ## Phase 3 (day 3): quality and the explorer
 
 - [ ] Training budget: if VRAM allows, cap 2.5 M / 300k steps on the winner (one run), compare.
