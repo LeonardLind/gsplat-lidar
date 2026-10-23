@@ -50,7 +50,9 @@ mapper can use the positions as priors to bridge weak links.
 - [ ] 2b. Spatial pairs: image pairs whose cameras are within ~2.5 m and whose view directions overlap, that are
   not already matched (skip neighbours within 2 frames). Cap at ~250k pairs (GPU matching ~0.15 s/pair ->
   ~10 h). `colmap matches_importer --match_type pairs`.
-- [ ] 2c. Mapper: first `global_mapper` on the augmented database (~1 h; check jumps with the path check in
+- [x] 2c (global part): global_mapper = ONE model of all 1531 frames, 4 jumps; trained `global_depth_150k`
+  = current (tie on PSNR, better visually, complete). pose_prior_mapper still running (to fix the low-pass sag).
+- [ ] (was) 2c. Mapper: first `global_mapper` on the augmented database (~1 h; check jumps with the path check in
   `app/stages/sfm.py model_quality`), then `pose_prior_mapper` if the global result still jumps. Bring the
   result into the LiDAR frame (Umeyama camera centres -> priors, then ICP onto the LiDAR with the pass-height
   check), compare with `merged_rigid` (camera heights, ICP inliers, number of registered frames).
