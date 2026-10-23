@@ -52,9 +52,11 @@ def main() -> None:
     xyz, *_ = load_lidar(a.lidar)
     if r.num_points3D() != len(xyz):
         raise SystemExit(f"the model has {r.num_points3D()} points, the LiDAR {len(xyz)}: not a merge.py model of this LiDAR")
-    # gsplat's parser orders the points by id; merge.py added them in LiDAR order (ids 1..N), so LiDAR row = parser index
-    if not np.array_equal(np.sort(np.fromiter(r.point3D_ids(), np.int64)), np.arange(1, len(xyz) + 1)):
-        raise SystemExit("point ids are not 1..N in LiDAR order")
+    # gsplat's parser orders the points by id; merge.py / from_solve.py added them in LiDAR order with consecutive
+    # ids (1..N, or k+1..k+N when the model had points before), so LiDAR row = parser index
+    ids = np.sort(np.fromiter(r.point3D_ids(), np.int64))
+    if not np.array_equal(ids, np.arange(ids[0], ids[0] + len(xyz))):
+        raise SystemExit("point ids are not consecutive: the LiDAR points were not added in order")
     rng = np.random.default_rng(0)
     names, chunks, counts = [], [], []
     ids = sorted(r.reg_image_ids(), key=lambda i: r.images[i].name)
