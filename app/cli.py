@@ -180,8 +180,6 @@ DEFAULT_LIDAR = r"C:\dev\gsl-data\data\processed\office_lidar_5cm.npz"
 
 
 def cmd_export(a: argparse.Namespace) -> None:
-    import _winapi
-
     from app.core.project import read_json
     from app.stages.export import export
     from app.stages.scene_export import write_scene
@@ -207,13 +205,31 @@ def cmd_export(a: argparse.Namespace) -> None:
                        lidar=Path(orient.get("lidar_npz", DEFAULT_LIDAR)) if orient.get("frame") == "lidar" else None)
     print(f"   scene.json + collision.json: floor z {info['floor_z']:.2f}, camera height {info['camera_height']:.2f}, "
           f"voxel {info['voxel']:.3f}, {info['occupied']} solid voxels ({info['carved']} carved along the camera path)")
+    if a.keep_current:
+        print("   export/current left unchanged (--keep-current); switch with: python -m app use-export")
+        return
+    _set_current(p, out)
+    print("   view it:  cd web/viewer && npm run dev   (then open http://127.0.0.1:5173)")
+
+
+def _set_current(p: Project, out: Path) -> None:
+    import _winapi
+
     current = p.dir / "export" / "current"
     if current.exists():
         current.rmdir()  # a junction: removes the link only
     _winapi.CreateJunction(str(out.resolve()), str(current))
     _explorer_follows(p, out)
     print(f"   export/current -> {out}")
-    print("   view it:  cd web/viewer && npm run dev   (then open http://127.0.0.1:5173)")
+
+
+def cmd_use_export(a: argparse.Namespace) -> None:
+    """Make an existing export the one the explorer shows (no re-export, so a cleanup stays applied)."""
+    p = Project(a.project)
+    out = p.dir / "export" / a.export
+    if not (out / "scene.json").exists():
+        raise SystemExit(f"no exported scene at export/{a.export}")
+    _set_current(p, out)
 
 
 def cmd_people(a: argparse.Namespace) -> None:
@@ -385,7 +401,13 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--views", help="view set id instead of a clip")
     s.add_argument("--run", required=True)
     s.add_argument("--formats", default="sog,html", help="comma list of sog, spz, html")
+    s.add_argument("--keep-current", action="store_true", help="do not make this export the explorer's current one")
     s.set_defaults(func=cmd_export)
+
+    s = sub.add_parser("use-export", help="make an existing export the explorer's current one")
+    s.add_argument("project")
+    s.add_argument("--export", required=True, help="e.g. 068+069/rigid_depth_v2_150k")
+    s.set_defaults(func=cmd_use_export)
 
     s = sub.add_parser("import-ply", help="make a viewer scene from a downloaded splat PLY (no cameras)")
     s.add_argument("project")

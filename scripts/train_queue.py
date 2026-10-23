@@ -4,7 +4,8 @@
 
 queue.json: {"jobs": [{"name": "...", "model": "<merged sparse/0>", "steps": 150000, "cap": 1600000,
               "extra": "--depth-loss ...", "env": {"GSL_DEPTH_POINTS": "..."}}, ...]}
-Each job trains (app.stages.train.train via a child process), exports itself (sog + LiDAR layer) and is scored with
+Each job trains (app.stages.train.train via a child process), exports itself (sog + LiDAR layer; export/current is
+left alone: choosing the scene the explorer shows is a decision, `python -m app use-export`) and is scored with
 app.lidar.eval_chunks on its last evaluation. Jobs already in the status file (<queue>.status.json) as done /
 diverged / failed are skipped, so the queue can be restarted after a reboot. Jobs added to queue.json while it runs
 are picked up.
@@ -59,7 +60,7 @@ def run_one(job: dict, log: Path) -> str:
             return f"diverged at step {step} (median loss {sorted(losses)[len(losses) // 2]:.2f})"
     if proc.returncode != 0:
         return f"failed (exit {proc.returncode})"
-    ex = subprocess.run([str(PY), "-m", "app", "export", "office-x4", "--views", "068+069", "--run", job["name"], "--formats", "sog"],
+    ex = subprocess.run([str(PY), "-m", "app", "export", "office-x4", "--views", "068+069", "--run", job["name"], "--formats", "sog", "--keep-current"],
                         cwd=str(REPO), capture_output=True, text=True)
     if ex.returncode != 0:
         return f"trained, export failed: {ex.stdout[-300:]}{ex.stderr[-300:]}"
