@@ -9,7 +9,7 @@ plan and decision rules: `ROADMAP_4DAYS.md`.*
 depth supervision, with a LiDAR layer, LiDAR collision and a tape measure in the explorer.
 - Open it: `cd web\viewer && npm run dev`, then http://127.0.0.1:5173 (desktop; L = LiDAR, Shift+L = LiDAR only,
   K colours, O opacity, [ ] ceiling cut, T measure). iPad: `scripts\tablet.ps1` (port 5180, read-only; Splat | Both
-  | LiDAR switch). Showing now: `export/068+069/prior_depth_300k` (switch any export with
+  | LiDAR switch). Showing now: `export/068+069/prior_depth_300k_all` (switch any export with
   `python -m app use-export office-x4 --export 068+069/<run>`).
 - Quality (held-out PSNR, all views / without the two down views): start of the week 15.2 dB (stretch pieces) ->
   rigid pieces 17.7 -> + LiDAR depth 17.8 -> one global solve 17.7 (complete: all 1531 frames) -> 300k steps 18.0
@@ -36,6 +36,7 @@ step G, ZV-E1 hybrid); fog remains in some corners; Windows Update is IT-managed
 ## Office PC run log (2026-10-19), newest first
 Office PC: Core Ultra 9 285, 64 GB, RTX 5060 8 GB (sm_120), driver 616.92. Goal: joint 068+069 run with the current defaults (no LiDAR yet).
 
+- **2026-10-24 17:00 `export/current` = `068+069/prior_depth_300k_all`: the winner (position-prior solve, LiDAR depth, 300k) trained on every frame; LiDAR-cleaned 174k Gaussians, 4.8 MB; looks the same as `prior_depth_300k` (`review/compare_prior_all.jpg`). This is the deliverable unless round 2 beats it.** Round 2 matching started 16:58 (205 blocks, ~12 h).
 - **2026-10-24 15:00 Round 2 prepared:** `sfm/068+069/aliked_prior2` = copy of the matched aliked_prior database with priors from the winning `solve_prior` (1530 / 1531 frames) and 250k more cross-pass / revisit pairs (1.75 M still unmatched); `scripts/phase2_prior_solve.py --dir ... --skip-prior-mapper` waits for the GPU, matches (~11 h), runs global_mapper (it uses the priors). Running now: `prior_depth_300k_all` (final all-frames version of the winner).
 - **2026-10-24 13:00 DECISION: the pose_prior_mapper solve wins. `prior_depth_300k`: 18.26 dB held-out (20.0 without the down views) vs 18.00 / 19.7 for `global_depth_300k`; visually clearly better (`review/compare_global_prior.jpg`): sharper corridor and ceiling lights (chunk 8), desks and chairs instead of blobs (chunks 1, 14), the plant wall readable (chunk 10). Now `export/current` (LiDAR-cleaned: 176k Gaussians, 4.9 MB).** Final all-frames version `prior_depth_300k_all` queued (~4 h).
 - **2026-10-24 09:40 iPad/tablet server (port 5180) now serves the office (`scripts	ablet.ps1`, rebuilt with the LiDAR layer: Splat | Both | LiDAR switch checked in touch mode, no page errors, still read-only: POST -> 405).** Start pose for LiDAR scenes (`scene_export.open_start`): among camera positions with >= 1 m clearance, the one most cameras passed within 3 m of, facing the longest free direction (the first frame of the walk faced a desk; the most open spot alone was a barely-seen, foggy area). `review/tablet_start.png`.
