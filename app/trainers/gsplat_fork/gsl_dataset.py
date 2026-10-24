@@ -6,7 +6,8 @@ class must be importable with its changes in place. Settings come from
 environment variables, which the workers inherit:
 
     GSL_MASK_DIR       masks/<image name>.png (255 = use), or ../mask_<view folder>.png
-    GSL_HOLDOUT_EVERY  every N-th 360 frame goes to the test split with all its views
+    GSL_HOLDOUT_EVERY  every N-th 360 frame goes to the test split with all its views; -N trains on everything and
+                       evaluates on every N-th frame (seen in training: monitoring only, not a held-out score)
     GSL_ONLY_PREFIX    debugging: keep only view folders with these prefixes (comma list)
     GSL_EVAL_PREFIX    evaluate only on view folders with these prefixes (comparable PSNR across view sets)
     GSL_DEPTH_POINTS   npz from app/lidar/visibility.py: the LiDAR points each image sees become the depth-loss
@@ -65,7 +66,12 @@ class GslDataset(gs_colmap.Dataset):
         if DEPTH_POINTS and load_depths:
             use_depth_points(parser, DEPTH_POINTS)
         super().__init__(parser, split, patch_size, load_depths)
-        if HOLDOUT_EVERY > 0:
+        if HOLDOUT_EVERY < 0:  # final deliverable: train on every image; "val" = every N-th 360 frame, for monitoring only
+            frames = [Path(n).stem for n in parser.image_names]
+            order = {f: i for i, f in enumerate(sorted(set(frames)))}
+            idx = np.arange(len(frames))
+            self.indices = idx if split == "train" else idx[np.array([order[f] % -HOLDOUT_EVERY == 0 for f in frames])]
+        elif HOLDOUT_EVERY > 0:
             frames = [Path(n).stem for n in parser.image_names]
             order = {f: i for i, f in enumerate(sorted(set(frames)))}
             is_test = np.array([order[f] % HOLDOUT_EVERY == 0 for f in frames])

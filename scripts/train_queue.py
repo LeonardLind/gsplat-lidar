@@ -4,7 +4,7 @@
 
 queue.json: {"jobs": [{"name": "...", "model": "<merged sparse/0>", "steps": 150000, "cap": 1600000,
               "extra": "--depth-loss ...", "env": {"GSL_DEPTH_POINTS": "..."}, "holdout": 10}, ...]}
-holdout 0 = train on every frame (final deliverable; the held-out score then measures training views).
+holdout -10 = train on every frame (final deliverable); its score then measures views seen in training.
 Each job trains (app.stages.train.train via a child process), exports itself (sog + LiDAR layer; export/current is
 left alone: choosing the scene the explorer shows is a decision, `python -m app use-export`) and is scored with
 app.lidar.eval_chunks on its last evaluation. Jobs already in the status file (<queue>.status.json) as done /
