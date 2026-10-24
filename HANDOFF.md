@@ -1,5 +1,38 @@
 # Handoff: where to pick up
 
+## READ THIS FIRST: what happened while you were away (2026-10-22 evening to 2026-10-26)
+
+*Draft of 2026-10-24 13:00; the final version is written on the last day. Details: run log below (newest first),
+plan and decision rules: `ROADMAP_4DAYS.md`.*
+
+**Where it stands:** one joined, metric, upright splat of the whole office in the LiDAR frame, trained with LiDAR
+depth supervision, with a LiDAR layer, LiDAR collision and a tape measure in the explorer.
+- Open it: `cd web\viewer && npm run dev`, then http://127.0.0.1:5173 (desktop; L = LiDAR, Shift+L = LiDAR only,
+  K colours, O opacity, [ ] ceiling cut, T measure). iPad: `scripts\tablet.ps1` (port 5180, read-only; Splat | Both
+  | LiDAR switch). Showing now: `export/068+069/prior_depth_300k` (switch any export with
+  `python -m app use-export office-x4 --export 068+069/<run>`).
+- Quality (held-out PSNR, all views / without the two down views): start of the week 15.2 dB (stretch pieces) ->
+  rigid pieces 17.7 -> + LiDAR depth 17.8 -> one global solve 17.7 (complete: all 1531 frames) -> 300k steps 18.0
+  -> **position-prior solve 18.3 / 20.0**. Single SfM pieces trained alone reached 18-22 dB, so the joined office is
+  now about as good as its best pieces were alone.
+
+**The key steps (and why):**
+1. Your clicks placed the 15 chunks; heights were wrong until the two pass heights (1.13 / 2.22 m) were used.
+2. Each SfM model as one rigid piece (not cut into stretches) + ICP onto the LiDAR: +0.7 dB, centre much better.
+3. LiDAR depth supervision (each image's visible LiDAR points as depth targets): removes the fog near the camera.
+4. **Phase 2, the real fix:** with every image now having a LiDAR-frame position, 245k image pairs across the low
+   and high pass and revisits were matched (never matched before, 11 h), then COLMAP solved the WHOLE walk as one
+   model (global mapper: 1531 / 1531 frames, 4 path jumps instead of 93), and the position-prior mapper (19.7 h)
+   with the LiDAR-frame positions as priors fixed the low-pass height sag: that is the current winner.
+5. 300k steps instead of 150k (+0.3 dB); LiDAR cleanup (Gaussians outside the building / invisible: 1.6 M -> ~180k,
+   21 MB -> 5 MB, looks the same); final versions trained on every frame.
+
+**Tried and rejected (numbers in the log):** pose refinement during training (lr 1e-4 diverged, 1e-5 no gain),
+stronger depth weight 0.05 (-0.6 dB), relocating faded Gaussians until the end (-1.0 dB).
+
+**Not done / still weak:** the splat is soft overall (footage-limited: dim office, small X4 sensor; see roadmap
+step G, ZV-E1 hybrid); fog remains in some corners; Windows Update is IT-managed (no pause; not overridden).
+
 ## Office PC run log (2026-10-19), newest first
 Office PC: Core Ultra 9 285, 64 GB, RTX 5060 8 GB (sm_120), driver 616.92. Goal: joint 068+069 run with the current defaults (no LiDAR yet).
 
