@@ -3,7 +3,8 @@
     C:\\dev\\envs\\pipe\\Scripts\\python.exe scripts\\train_queue.py <queue.json>
 
 queue.json: {"jobs": [{"name": "...", "model": "<merged sparse/0>", "steps": 150000, "cap": 1600000,
-              "extra": "--depth-loss ...", "env": {"GSL_DEPTH_POINTS": "..."}}, ...]}
+              "extra": "--depth-loss ...", "env": {"GSL_DEPTH_POINTS": "..."}, "holdout": 10}, ...]}
+holdout 0 = train on every frame (final deliverable; the held-out score then measures training views).
 Each job trains (app.stages.train.train via a child process), exports itself (sog + LiDAR layer; export/current is
 left alone: choosing the scene the explorer shows is a decision, `python -m app use-export`) and is scored with
 app.lidar.eval_chunks on its last evaluation. Jobs already in the status file (<queue>.status.json) as done /
@@ -40,7 +41,7 @@ def run_one(job: dict, log: Path) -> str:
         "from app.stages.train import TrainParams, train\n"
         f"proj = Path({str(PROJ)!r})\n"
         f"sys.exit(train(proj / 'views' / '068+069', Path({job['model']!r}), proj / 'train' / '068+069' / {job['name']!r}, "
-        f"TrainParams(steps={int(job['steps'])}, cap_max={int(job['cap'])})))\n")
+        f"TrainParams(steps={int(job['steps'])}, cap_max={int(job['cap'])}, holdout_every={int(job.get('holdout', 10))})))\n")
     with open(log, "w", encoding="utf-8") as f:
         proc = subprocess.Popen([str(PY), "-c", code], stdout=f, stderr=subprocess.STDOUT, cwd=str(REPO))
     losses: deque[float] = deque(maxlen=300)
