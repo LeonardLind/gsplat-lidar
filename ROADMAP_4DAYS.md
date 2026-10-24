@@ -74,6 +74,11 @@ mapper can use the positions as priors to bridge weak links.
   (`sfm/068+069/lidar_rerun*`, `lidar/rerun*`, `train/068+069/rerun_*`, `export/068+069/rerun_*`); the best
   pre-re-run export is kept and listed in HANDOFF next to the re-run's, so the user can compare both.
 
+- [ ] 2f. Round 2 (started 2026-10-24 15:00): priors from the winning `solve_prior` (1530 frames), the next 250k
+  unmatched cross-pass pairs, matched in `sfm/068+069/aliked_prior2` (~11 h after the GPU frees up), then
+  global_mapper only (`--skip-prior-mapper`; it uses the priors, 30 min). Then by hand: from_solve ->
+  lidar/solve_round2, visibility, queue `round2_depth_300k`; compare with `prior_depth_300k` (18.26 dB).
+
 ## Phase 3 (day 3): quality and the explorer
 
 - [ ] Training budget: if VRAM allows, cap 2.5 M / 300k steps on the winner (one run), compare.

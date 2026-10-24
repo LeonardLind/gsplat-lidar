@@ -69,7 +69,12 @@ def report(sparse: Path) -> list:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--wait-queue", type=Path, default=Path(r"C:\dev\gsl-data\projects\office-x4\lidar\queue.json"))
+    ap.add_argument("--dir", type=Path, help="work folder (default aliked_prior); round 2: aliked_prior2")
+    ap.add_argument("--skip-prior-mapper", action="store_true", help="global_mapper only (it uses the priors too; 30 min vs ~20 h)")
     a = ap.parse_args()
+    global D
+    if a.dir:
+        D = a.dir
     while not queue_idle(a.wait_queue):
         time.sleep(120)
     log("training queue idle: GPU free")
@@ -85,13 +90,14 @@ def main() -> None:
         log("matching done")
     rep = json.loads((D / "phase2_report.json").read_text()) if (D / "phase2_report.json").exists() else {}
     common = ["--database_path", db, "--image_path", IMAGES]
-    for name, cmd, extra in (
+    steps = (
         ("sparse_global", "global_mapper", ["--GlobalMapper.refine_sensor_from_rig", "0", "--GlobalMapper.ba_refine_focal_length", "0",
                                             "--GlobalMapper.ba_refine_principal_point", "0", "--GlobalMapper.ba_refine_extra_params", "0"]),
         ("sparse_prior", "pose_prior_mapper", ["--Mapper.ba_refine_sensor_from_rig", "0", "--Mapper.ba_refine_focal_length", "0",
                                                "--Mapper.ba_refine_principal_point", "0", "--Mapper.ba_refine_extra_params", "0",
                                                "--use_robust_loss_on_prior_position", "1"]),
-    ):
+    )
+    for name, cmd, extra in steps[:1] if a.skip_prior_mapper else steps:
         out = D / name
         if (out / "done").exists():
             continue
