@@ -84,7 +84,9 @@ mapper can use the positions as priors to bridge weak links.
   the ceiling), re-export; check visually.
 - [x] Measure tool (T, metric scenes only, snaps to LiDAR points): floor-to-ceiling 2.71 m vs LiDAR 2.70
   (`web/viewer/tools/test_measure.mjs`).
-- [ ] Explorer (rest): distance measuring tool (the scale is metric now; PLAN: measurement only with exact scale),
+- [x] Tablet build serves the office (5180, LiDAR switch), better start pose. LiDAR point-size control: skipped
+  (fixed 3.5 cm points, capped at 14 px, look fine).
+- [x] (was) Explorer (rest): distance measuring tool (the scale is metric now; PLAN: measurement only with exact scale),
   LiDAR point-size control, a short help text for the LiDAR keys in the tablet view; tablet build.
 - [ ] If time: per-pass appearance check (low vs high pass exposure differences).
 

@@ -44,6 +44,31 @@ def lidar_as_ply(xyz: np.ndarray) -> dict[str, np.ndarray]:
             **{f"scale_{i}": np.full(n, np.log(0.03), np.float32) for i in range(3)}}
 
 
+def open_start(cams: np.ndarray, xyz: np.ndarray) -> tuple[np.ndarray, float]:
+    """Start pose for a LiDAR scene: among camera positions with at least 1 m of free space around them (to the
+    nearest LiDAR point between knee and head height), the one most other cameras passed within 3 m of (a
+    well-covered, hence well-reconstructed, spot; the most open spot alone was a foggy, barely seen area),
+    looking along the longest free horizontal direction. The first camera of the walk is often at a desk."""
+    from scipy.spatial import cKDTree
+
+    band = xyz[(xyz[:, 2] > 0.4) & (xyz[:, 2] < 2.0)]
+    tree = cKDTree(band[:, :2])
+    clear, _ = tree.query(cams[:, :2])
+    cover = np.array([len(x) for x in cKDTree(cams[:, :2]).query_ball_point(cams[:, :2], 3.0)])
+    score = np.where(clear >= 1.0, cover, -1) if (clear >= 1.0).any() else clear
+    c = cams[int(np.argmax(score))]
+    best, yaw = -1.0, 0.0
+    for a in np.radians(np.arange(0, 360, 10)):
+        u = np.array([np.cos(a), np.sin(a)])
+        ts = np.arange(0.3, 15.0, 0.1)
+        free = tree.query(c[:2] + ts[:, None] * u, distance_upper_bound=0.15)[0]
+        hit = np.nonzero(np.isfinite(free))[0]
+        reach = ts[hit[0]] if len(hit) else ts[-1]
+        if reach > best:
+            best, yaw = reach, float(np.degrees(a))
+    return c, yaw
+
+
 def write_lidar_layer(out_dir: Path, xyz: np.ndarray, rgb: np.ndarray, intensity: np.ndarray) -> dict:
     """lidar.bin for the viewer's LiDAR layer (web/viewer/src/lidar.ts): little-endian uint32 count, then
     float32 xyz (count x 3), uint8 rgb (count x 3), uint8 intensity (count; 1st-99th percentile stretched)."""
@@ -264,6 +289,8 @@ def write_scene(out_dir: Path, name: str, splat_file: str, model_dir: Path, ply_
     h = info["camera_height"]
     start = cams[0]
     yaw = float(np.degrees(np.arctan2(fwd[0][1], fwd[0][0])))
+    if lidar is not None:
+        start, yaw = open_start(cams, xyz)
     scene_file = out_dir / "scene.json"
     old = json.loads(scene_file.read_text(encoding="utf-8")) if scene_file.exists() else {}
     placeholder_audio(out_dir)
