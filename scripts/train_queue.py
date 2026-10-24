@@ -28,6 +28,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 PY = Path(r"C:\dev\envs\pipe\Scripts\python.exe")
 PROJ = REPO / "projects" / "office-x4"
+LINGER_S = 3600  # an empty queue waits this long for new jobs before the runner exits
 LOSS = re.compile(r"loss=([0-9.]+)\|.*?\|\s*(\d+)/(\d+)")
 
 
@@ -86,12 +87,19 @@ def main() -> None:
     qfile = Path(sys.argv[1])
     sfile = qfile.with_suffix(".status.json")
     status = json.loads(sfile.read_text()) if sfile.exists() else {}
+    idle_since = None
     while True:
         jobs = json.loads(qfile.read_text())["jobs"]
         todo = [j for j in jobs if status.get(j["name"], {}).get("state") not in ("done", "diverged", "failed", "skip")]
         if not todo:
-            print("queue empty", flush=True)
-            return
+            # wait a while for jobs added after the last one finished (2026-10-24: a job queued 2 min late sat idle)
+            idle_since = idle_since or time.time()
+            if time.time() - idle_since > LINGER_S:
+                print("queue empty", flush=True)
+                return
+            time.sleep(60)
+            continue
+        idle_since = None
         job = todo[0]
         log = qfile.parent / f"train_{job['name']}.log"
         status[job["name"]] = {"state": "running", "start": time.strftime("%Y-%m-%d %H:%M"), "log": str(log)}
