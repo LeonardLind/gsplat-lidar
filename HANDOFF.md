@@ -13,7 +13,7 @@ depth supervision, with a LiDAR layer, LiDAR collision and a tape measure in the
   `python -m app use-export office-x4 --export 068+069/<run>`).
 - Quality (held-out PSNR, all views / without the two down views): start of the week 15.2 dB (stretch pieces) ->
   rigid pieces 17.7 -> + LiDAR depth 17.8 -> one global solve 17.7 (complete: all 1531 frames) -> 300k steps 18.0
-  -> **position-prior solve 18.3 / 20.0**. Single SfM pieces trained alone reached 18-22 dB, so the joined office is
+  -> position-prior solve 18.3 / 20.0 -> **500k steps 18.4 / 20.2**. Single SfM pieces trained alone reached 18-22 dB, so the joined office is
   now about as good as its best pieces were alone.
 
 **The key steps (and why):**
@@ -36,6 +36,7 @@ step G, ZV-E1 hybrid); fog remains in some corners; Windows Update is IT-managed
 ## Office PC run log (2026-10-19), newest first
 Office PC: Core Ultra 9 285, 64 GB, RTX 5060 8 GB (sm_120), driver 616.92. Goal: joint 068+069 run with the current defaults (no LiDAR yet).
 
+- **2026-10-25 10:45 DECISION: 500k steps win. `prior_depth_500k`: 18.41 dB held-out (20.2 without the down views) vs 18.26 / 20.0 at 300k; visually the same or slightly more detailed (`review/compare_300k_500k.jpg`). Current until its all-frames final `prior_depth_500k_all` (queued, ~7 h) is done.** LiDAR-cleaned 132k Gaussians, 4.2 MB. Round-2 pose_prior_mapper at 720 / 1531 frames.
 - **2026-10-25 02:45 Round 2 global solve is WORSE; its training stopped at 16.6k steps.** Matching (250k more pairs) took 8.8 h; `global_mapper` registered all 1531 frames but the path has 29 jumps of >= 10x the usual step (largest 1622x; the winning solve had 7), 44 % of points within 15 cm of the LiDAR (winner 51 %), 482 images see < 200 LiDAR points; training ran at loss ~0.95 / depth loss ~84 (healthy: ~0.1 / ~2), so it was stopped rather than spending 4 h. More matches made the fast global mapper worse here (probably wrong cross-pass matches it cannot reject without the priors' help). Started instead: `pose_prior_mapper` on the round-2 database (~20 h, CPU; it won last time). The current scene is unaffected.
 - **2026-10-24 17:00 `export/current` = `068+069/prior_depth_300k_all`: the winner (position-prior solve, LiDAR depth, 300k) trained on every frame; LiDAR-cleaned 174k Gaussians, 4.8 MB; looks the same as `prior_depth_300k` (`review/compare_prior_all.jpg`). This is the deliverable unless round 2 beats it.** Round 2 matching started 16:58 (205 blocks, ~12 h).
 - **2026-10-24 15:00 Round 2 prepared:** `sfm/068+069/aliked_prior2` = copy of the matched aliked_prior database with priors from the winning `solve_prior` (1530 / 1531 frames) and 250k more cross-pass / revisit pairs (1.75 M still unmatched); `scripts/phase2_prior_solve.py --dir ... --skip-prior-mapper` waits for the GPU, matches (~11 h), runs global_mapper (it uses the priors). Running now: `prior_depth_300k_all` (final all-frames version of the winner).
