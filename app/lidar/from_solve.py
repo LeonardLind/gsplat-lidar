@@ -85,11 +85,11 @@ def main() -> None:
             "common_with_reference": len(common), "reference_images": len(ref),
             "to_reference_umeyama_m": {"median": float(np.median(res0)), "p90": float(np.percentile(res0, 90))},
             "to_reference_final_m": {"median": float(np.median(res1)), "p90": float(np.percentile(res1, 90))},
-            "icp_used": used_icp, "icp_points_within_15cm": float(inl), "scale": s,
+            "icp_used": used_icp, "icp_points_within_15cm": float(inl), "sim3_scale": s,
             "camera_z_p5_p50_p95": np.percentile(cz, [5, 50, 95]).round(2).tolist(), "quality": quality,
             "lidar_points": int(len(lid)), "lidar_npz": str(a.lidar)}
     (a.out / "from_solve.json").write_text(json.dumps(info, indent=1))
-    (model.parent / "0_orient.json").write_text(json.dumps({"scale": "metric", "frame": "lidar", "lidar_npz": str(a.lidar), **info}, indent=1))
+    (model.parent / "0_orient.json").write_text(json.dumps({**info, "scale": "metric", "frame": "lidar"}, indent=1))
     print(json.dumps(info, indent=1))
 
 

@@ -37,6 +37,8 @@ class TrainParams:
     # every unseen Gaussian at full Adam step size; in 360 captures (each view sees a small part of the
     # scene) the splat fades into fog after ~2k steps (069 at 8k steps: 13.8 dB, mean opacity 0.001).
     visible_adam: bool = True
+    # "mcmc" (fixed budget cap_max, relocation) or "default" (gsplat's adaptive densification: grows as needed, no cap)
+    strategy: str = "mcmc"
 
 
 def junction(link: Path, target: Path) -> None:
@@ -91,17 +93,18 @@ def train(views_dir: Path, sparse_model: Path, run_dir: Path, p: TrainParams) ->
 
     steps = [s for s in (7_000, p.steps // 2, p.steps) if s <= p.steps]
     steps = sorted(set(steps))
-    args = [str(gs_python()), str(LAUNCHER), "mcmc",
+    args = [str(gs_python()), str(LAUNCHER), p.strategy,
             "--data-dir", str(data), "--result-dir", str(result),
             "--data-factor", str(p.data_factor),
             "--no-normalize-world-space",
             "--max-steps", str(p.steps),
-            "--strategy.cap-max", str(p.cap_max),
             "--sh-degree", str(p.sh_degree),
             "--save-ply", "--ply-steps", *map(str, steps),
             "--save-steps", *map(str, steps),
             "--eval-steps", *map(str, steps),
             "--disable-video"]
+    if p.strategy == "mcmc":
+        args += ["--strategy.cap-max", str(p.cap_max)]
     if not p.viewer:
         args.append("--disable-viewer")
     if p.ppisp:

@@ -42,7 +42,7 @@ def run_one(job: dict, log: Path) -> str:
         "from app.stages.train import TrainParams, train\n"
         f"proj = Path({str(PROJ)!r})\n"
         f"sys.exit(train(proj / 'views' / '068+069', Path({job['model']!r}), proj / 'train' / '068+069' / {job['name']!r}, "
-        f"TrainParams(steps={int(job['steps'])}, cap_max={int(job['cap'])}, holdout_every={int(job.get('holdout', 10))})))\n")
+        f"TrainParams(steps={int(job['steps'])}, cap_max={int(job['cap'])}, holdout_every={int(job.get('holdout', 10))}, strategy={job.get('strategy', 'mcmc')!r})))\n")
     with open(log, "w", encoding="utf-8") as f:
         proc = subprocess.Popen([str(PY), "-c", code], stdout=f, stderr=subprocess.STDOUT, cwd=str(REPO))
     losses: deque[float] = deque(maxlen=300)
