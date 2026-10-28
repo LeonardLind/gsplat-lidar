@@ -81,6 +81,12 @@ def plan(a: argparse.Namespace) -> None:
     pid = np.fromiter(r.points3D.keys(), dtype=np.int64)
     pxyz = np.array([r.points3D[int(i)].xyz for i in pid])
     _, near = cKDTree(fc).query(pxyz)
+    vis = np.load(a.visible) if a.visible else None
+    if vis is not None:
+        # LiDAR row k of visibility.py = k-th smallest point id
+        vis_names, vis_off, vis_idx = vis["names"], vis["offsets"], vis["indices"]
+        sorted_ids = np.sort(pid)
+        img_frame = {im.name: im.frame_id for im in r.images.values()}
     txt = a.out / "_full_txt"
     if not (txt / "points3D.txt").exists():
         txt.mkdir(parents=True, exist_ok=True)
@@ -93,7 +99,12 @@ def plan(a: argparse.Namespace) -> None:
             continue
         near_own = tree2.query_ball_point(fc[own, :2], a.overlap)
         train = np.unique(np.concatenate([own, *map(np.array, near_own)]).astype(int))
-        pts = pid[np.isin(near, train)]
+        if vis is None:
+            pts = pid[np.isin(near, train)]
+        else:
+            keep = set(int(x) for x in fid[train])
+            rows = [k for k, n in enumerate(vis_names) if img_frame.get(str(n)) in keep]
+            pts = sorted_ids[np.unique(np.concatenate([vis_idx[vis_off[k]:vis_off[k + 1]] for k in rows]))]
         dest = a.out / f"s{s}" / "sparse" / "0"
         write_subset(txt, dest, set(int(x) for x in fid[train]), set(int(x) for x in pts))
         (dest.parent / "0_orient.json").write_text(json.dumps(
@@ -143,6 +154,8 @@ def merge(a: argparse.Namespace) -> None:
     parts, header, props0, report = [], None, None, []
     for s in info["sections"]:
         run = TRAIN / f"{a.prefix}_s{s['id']}"
+        if a.fallback and not (run / "result" / "ply").exists():
+            run = TRAIN / f"{a.fallback}_s{s['id']}"
         plys = sorted((run / "result" / "ply").glob("*.ply"), key=lambda f: int("".join(c for c in f.stem if c.isdigit()) or 0))
         if not plys:
             raise SystemExit(f"section {s['id']}: no PLY in {run}")
@@ -178,6 +191,9 @@ def main() -> None:
     p.add_argument("out", type=Path)
     p.add_argument("--k", type=int, default=16)
     p.add_argument("--overlap", type=float, default=1.5, help="frames within this many metres (xy) of a section's own frames also train it")
+    p.add_argument("--visible", type=Path, help="app/lidar/visibility.py npz: start from every LiDAR point the section's "
+                   "images see (default: the points nearest to its frames; 2026-10-28 that left walls seen through doors "
+                   "without points, and sections 1, 5, 7, 9 filled them with giant blobs in front of the cameras)")
     p.set_defaults(fn=plan)
     p = sub.add_parser("queue")
     p.add_argument("out", type=Path)
@@ -190,6 +206,7 @@ def main() -> None:
     p.add_argument("out", type=Path)
     p.add_argument("prefix")
     p.add_argument("merged")
+    p.add_argument("--fallback", help="run prefix to use for sections not (yet) trained under <prefix>")
     p.set_defaults(fn=merge)
     a = ap.parse_args()
     a.fn(a)

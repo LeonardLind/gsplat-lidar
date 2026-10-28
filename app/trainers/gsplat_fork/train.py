@@ -75,6 +75,30 @@ def _depth_l1_loss_safe(pred_depth, gt_depth, scene_scale: float = 1.0):
 
 gs_losses.depth_l1_loss = _depth_l1_loss_safe
 
+# GSL_BOX="xmin,ymin,zmin,xmax,ymax,zmax" (LiDAR frame): every 100 steps, Gaussians outside the box get opacity
+# ~0, so MCMC relocates them onto live ones (until refine_stop_iter) and they cannot hang in front of the cameras.
+# Section training of 2026-10-27: in 4 of 16 sections (windows, few anchors) the Gaussians drifted up to 8 m above
+# and below the building, grew, and every view turned into one flat blob (PSNR 17 -> 13 dB) with a normal loss.
+BOX = os.environ.get("GSL_BOX")
+if BOX:
+    from gsplat.strategy import DefaultStrategy, MCMCStrategy
+
+    _box = torch.tensor([float(v) for v in BOX.split(",")])
+    print(f"[gsl] box guard: Gaussians outside {BOX} are switched off every 100 steps", flush=True)
+
+    def _boxed(orig):
+        def step_post_backward(self, params, optimizers, state, step, info, *args, **kwargs):
+            if step % 100 == 0:
+                with torch.no_grad():
+                    b = _box.to(params["means"].device)
+                    out = ((params["means"] < b[:3]) | (params["means"] > b[3:])).any(dim=1)
+                    params["opacities"].data[out] = -10.0  # sigmoid(-10) = 5e-5, below MCMC's min_opacity 0.005
+            return orig(self, params, optimizers, state, step, info, *args, **kwargs)
+        return step_post_backward
+
+    MCMCStrategy.step_post_backward = _boxed(MCMCStrategy.step_post_backward)
+    DefaultStrategy.step_post_backward = _boxed(DefaultStrategy.step_post_backward)
+
 PROGRESS = os.environ.get("GSL_PROGRESS_FILE")
 CONTROL = os.environ.get("GSL_CONTROL_FILE")
 
